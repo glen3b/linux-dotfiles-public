@@ -1,0 +1,6 @@
+[Unit]
+Description=Clean the downloads folder of old files regularly
+
+[Service]
+ExecStart=/home/glen/bin/clean-downloads
+WorkingDirectory=/home/glen/Downloads

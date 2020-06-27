@@ -1,0 +1,9 @@
+[Unit]
+Description=Windows Gaming VM startup
+Requires=pulseaudio-tcp.socket
+
+[Service]
+ExecStart=/usr/bin/virsh -c qemu:///system start Windows_Gaming
+
+[Install]
+WantedBy=default.target

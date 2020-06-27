@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=kill-xselect
+Comment=Select a window, then kill the application that owns it
+
+Exec=kill-xselect %f
+Terminal=false
+StartupNotify=false

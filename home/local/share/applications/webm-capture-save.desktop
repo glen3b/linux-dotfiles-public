@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=webm-capture-save
+Comment=Take an animated screengrab to your home directory
+
+Exec=webm-capture-save %f
+Terminal=false
+StartupNotify=false

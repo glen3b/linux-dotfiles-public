@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=mpc
+Comment=Control the Music Player Daemon via dmenu
+
+Exec=/home/glen/bin/mpdmenu
+Terminal=false
+StartupNotify=false

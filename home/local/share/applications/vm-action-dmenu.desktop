@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=vm-action
+Comment=Run a VM action via a dmenu
+
+Exec=/home/glen/bin/vm-action-dmenu
+Terminal=false
+StartupNotify=false

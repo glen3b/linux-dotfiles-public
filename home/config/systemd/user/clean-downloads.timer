@@ -1,0 +1,10 @@
+[Unit]
+Description=Clean the downloads folder of old files regularly
+
+[Timer]
+OnCalendar=*-*-* 04:45:00
+Persistent=true
+Unit=clean-downloads.service
+
+[Install]
+WantedBy=timers.target

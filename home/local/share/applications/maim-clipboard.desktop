@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=maim-clipboard
+Comment=Take a screenshot to your clipboard
+
+Exec=maim-clipboard %f
+Terminal=false
+StartupNotify=false
