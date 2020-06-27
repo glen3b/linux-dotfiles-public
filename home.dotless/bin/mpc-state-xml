@@ -1,0 +1,74 @@
+#!/usr/bin/env python
+from mpd import MPDClient
+from lxml import etree
+from lxml import objectify
+
+def add_songinfo(mpdinfo, xmlinfo, tag, xmltag=None):
+    if xmltag is None:
+        xmltag = tag
+    
+    if tag in mpdinfo:
+        elem = objectify.SubElement(xmlinfo, xmltag)
+        elem._setText(mpdinfo[tag])
+
+def add_song_elem(parent, songdata, playerstatus):
+    elem = objectify.SubElement(parent, "song")
+    elem.set("isPlaying", "true" if playerstatus['songid'] == songdata['id'] else "false")
+    elem.set("id", songdata['id'])
+    if 'artist' in songdata:
+        elem.set("artist", songdata['artist'])
+    if 'album' in songdata:
+        elem.set("album", songdata['album'])
+    if 'title' in songdata:
+        elem.set("title", songdata['title'])
+    else:
+        elem.set("title", songdata['file'])
+    elem.set("position", songdata['pos'])
+
+if __name__ == "__main__":
+    client = MPDClient()
+    try:
+        client.timeout = 0.5
+        client.idletimeout = None
+        client.connect("localhost", 6600)
+
+        mpdstate = client.status()
+
+        if mpdstate['state'] == 'stop':
+            # a hack
+            print('<root xmlns:py="http://codespeak.net/lxml/objectify/pytype"><state py:pytype="str">stop</state></root>')
+            exit(0)
+
+        currPlaylist = client.playlistinfo()
+
+        E = objectify.E
+        xmlroot = E.mpdStatus(
+        E.state(mpdstate['state']),
+        E.time(float(mpdstate['elapsed'])),
+        E.length(float(mpdstate['duration'])),
+        E.repeat(mpdstate['repeat'] == '1'),
+        E.random(mpdstate['random'] == '1'),
+        E.single(mpdstate['single'] != '0'),
+        E.singleoneshot(mpdstate['single'] == 'oneshot'),
+        E.consume(mpdstate['consume'] == '1')
+        )
+
+        if 'volume' in mpdstate:
+            xmlroot.append(E.volume(int(mpdstate['volume'])))
+
+        currsongdata = client.currentsong()
+
+        xmlsonginfo = objectify.SubElement(xmlroot, "information")
+
+        add_songinfo(currsongdata, xmlsonginfo, 'album')
+        add_songinfo(currsongdata, xmlsonginfo, 'title')
+        add_songinfo(currsongdata, xmlsonginfo, 'file')
+        add_songinfo(currsongdata, xmlsonginfo, 'artist')
+
+        xmlplaylistinfo = objectify.SubElement(xmlroot, "playlist")
+        for songData in currPlaylist:
+            add_song_elem(xmlplaylistinfo, songData, mpdstate)
+
+        print(etree.tostring(xmlroot, pretty_print=True, encoding="utf-8").decode("utf-8"))
+    finally:
+        client.disconnect()

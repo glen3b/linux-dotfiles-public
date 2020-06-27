@@ -1,0 +1,134 @@
+#!/usr/bin/env python
+import argparse
+from mpd import MPDClient
+from lxml import etree
+from lxml import objectify
+import itertools
+
+
+def cmd_play_id(client: MPDClient, cmdArgs):
+    client.playid(cmdArgs.songId)
+
+def cmd_delete_id(client: MPDClient, cmdArgs):
+    client.deleteid(cmdArgs.songId)
+
+def cmd_move_id(client: MPDClient, cmdArgs):
+    if cmdArgs.index < 1:
+        raise RuntimeError("move does not accept indices less than 1")
+    client.moveid(cmdArgs.songId, cmdArgs.index - 1)
+
+def cmd_priority_id(client: MPDClient, cmdArgs):
+    client.prioid(cmdArgs.priority, cmdArgs.songId)
+
+def cmd_next_id(client: MPDClient, cmdArgs):
+    clientStat = client.status()
+    if clientStat['random'] == '1':
+        # compute the appropriate priority to set, swapping current "next" down if needed
+
+        # dict: priorities to lists
+        uniq_prios = {}
+        prio_list = []
+        for k, g in itertools.groupby(((int(song['id']), (int(song['prio']) if 'prio' in song else 0)) for song in client.playlistid()), lambda x: x[1]):
+            uniq_prios[k] = list(x[0] for x in g)
+            prio_list.append(k)
+        
+        prio_list.sort(reverse=True)
+
+        target_prio = None
+        # bump up the priority by this amount, to give user room for manual intervention later
+        prio_buffer_amt = 10
+
+        if len(uniq_prios[prio_list[0]]) > 1:
+            target_prio = min(prio_list[0] + prio_buffer_amt, 255)
+        elif len(prio_list) > 1:
+            # another song is lined up to be first, but we can bump it down
+            target_prio = prio_list[0]
+            client.prioid(prio_list[1], uniq_prios[prio_list[0]][0])
+        else:
+            # there is only one song
+            target_prio = min(prio_list[0] + prio_buffer_amt, 255)
+
+        client.prioid(target_prio, cmdArgs.songId)
+    else:
+        currSongIdx = int(clientStat['song'])
+        # this may fail if the playlist state changes in between calls, i.e. race condition
+        if currSongIdx > 0:
+            client.moveid(cmdArgs.songId, currSongIdx)
+        else:
+            client.moveid(cmdArgs.songId, 1)
+
+def print_playlist_xml(client: MPDClient):
+    mpdstate = client.status()
+
+    if mpdstate['state'] == 'stop':
+        print('<playlist/>')
+        return
+
+    currPlaylist = client.playlistinfo()
+
+    xmlplaylist = objectify.Element("playlist")
+
+    for songData in currPlaylist:
+        elem = objectify.SubElement(xmlplaylist, "song")
+        elem.set("isPlaying", "true" if mpdstate['songid'] == songData['id'] else "false")
+        elem.set("id", songData['id'])
+        
+        if 'artist' in songData:
+            elem.set("artist", songData['artist'])
+        
+        if 'album' in songData:
+            elem.set("album", songData['album'])
+        
+        if 'title' in songData:
+            elem.set("title", songData['title'])
+        else:
+            elem.set("title", songData['file'])
+        
+        elem.set("position", songData['pos'])
+
+    print(etree.tostring(xmlplaylist, pretty_print=True, encoding="utf-8").decode("utf-8"))
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='MPD client which uses IDs instead of playlist indices.')
+    parser.add_argument('--print-playlist-xml', dest='printPlaylistXml', action='store_true',
+                        help='after applying changes, print playlist status in XML form')
+    parser.add_argument('--host', dest='mpdHost', default='localhost', help='hostname of MPD server')
+    parser.add_argument('--port', dest='mpdPort', type=int, default=6600, help='port of MPD server')
+
+    subparsers = parser.add_subparsers(help='the action to take', required=True, dest='commandname')
+
+    parser_play = subparsers.add_parser('play', help='play a song')
+    parser_play.add_argument('songId', type=int, help='the ID of the song to play')
+    parser_play.set_defaults(command=cmd_play_id)
+
+    parser_delete = subparsers.add_parser('delete', help='remove a song from the playlist')
+    parser_delete.add_argument('songId', type=int, help='the ID of the song to remove')
+    parser_delete.set_defaults(command=cmd_delete_id)
+
+    parser_prio = subparsers.add_parser('prio', help='set song priority in playlist (for random mode)')
+    parser_prio.add_argument('songId', type=int, help='the ID of the song to prioritize')
+    parser_prio.add_argument('priority', type=int, help='the priority of the song')
+    parser_prio.set_defaults(command=cmd_priority_id)
+
+    parser_mov = subparsers.add_parser('move', help='move song in playlist (possibly unsafe)')
+    parser_mov.add_argument('songId', type=int, help='the ID of the song to move')
+    parser_mov.add_argument('index', type=int, help='the new 1-based index of the song')
+    parser_mov.set_defaults(command=cmd_move_id)
+
+    parser_next = subparsers.add_parser('asnext', help='try marking song as next (possibly unsafe)')
+    parser_next.add_argument('songId', type=int, help='the ID of the song to move')
+    parser_next.set_defaults(command=cmd_next_id)
+
+    args = parser.parse_args()
+
+    client = MPDClient()
+    client.timeout = 0.5
+    client.idletimeout = None
+    client.connect(args.mpdHost, args.mpdPort)
+
+    args.command(client, args)
+
+    if args.printPlaylistXml:
+        print_playlist_xml(client)
+
+    client.disconnect()

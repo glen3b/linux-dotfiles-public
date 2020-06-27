@@ -1,0 +1,186 @@
+#!/usr/bin/env python
+from mpd import MPDClient
+from mpd import CommandError, ConnectionError
+from mpd.base import _NotConnected, ERROR_PREFIX
+import mpd
+import warnings
+import sys
+
+# monkeypatch: python-mpd2 binary returns, PR#111
+if not hasattr(MPDClient(), "albumart"):
+    def get_album_art(self, uri):
+        return self._execute_binary("albumart", [uri])
+
+    setattr(MPDClient, 'albumart', get_album_art)
+    setattr(MPDClient, '__orig_reset', MPDClient._reset)
+
+    def new_client_reset(self):
+        self.__orig_reset()
+        self._rbfile = _NotConnected()
+    
+    def client_read_binary(self):
+        size = None
+        chunk_size = 0
+        while chunk_size == 0:
+            line = self._rbfile.readline().decode("utf-8")
+            if not line.endswith("\n"):
+                self.disconnect()
+                raise ConnectionError("Connection lost while reading line")
+            line = line.rstrip("\n")
+            if line.startswith(ERROR_PREFIX):
+                error = line[len(ERROR_PREFIX):].strip()
+                raise CommandError(error)
+            field, val = line.split(": ")
+            if field == "size":
+                size = int(val)
+            elif field == "binary":
+                chunk_size = int(val)
+        if size is None:
+            size = chunk_size
+        data = self._rbfile.read(chunk_size)
+        self._rbfile.read(1)  # discard newline
+        self._rbfile.readline().decode("utf-8")
+        return size, data
+
+    def client_executecmd_binary(self, command, args):
+        data = bytearray()
+        assert len(args) == 1
+        args.append(0)
+        while True:
+            self._write_command(command, args)
+            size, chunk = self._read_binary()
+            data += chunk
+            args[-1] += len(chunk)
+            if len(data) == size:
+                break
+        return data
+    
+    def client_connect(self, host, port=None, timeout=None):
+        mpd.base.logger.info(
+            "Calling MPD connect(%r, %r, timeout=%r)", host, port, timeout)
+        if self._sock is not None:
+            raise ConnectionError("Already connected")
+        if timeout is not None:
+            warnings.warn(
+                "The timeout parameter in connect() is deprecated! "
+                "Use MPDClient.timeout = yourtimeout instead.",
+                DeprecationWarning)
+            self.timeout = timeout
+        if host.startswith("/"):
+            self._sock = self._connect_unix(host)
+        else:
+            if port is None:
+                raise ValueError("port argument must be specified when connecting via tcp")
+            self._sock = self._connect_tcp(host, port)
+        if mpd.base.IS_PYTHON2:
+            self._rfile = self._sock.makefile("r")
+            self._wfile = self._sock.makefile("w")
+            self._rbfile = self._sock.makefile("rb")
+        else:
+            # - Force UTF-8 encoding, since this is dependant from the LC_CTYPE
+            #   locale.
+            # - by setting newline explicit, we force to send '\n' also on
+            #   windows
+            self._rfile = self._sock.makefile(
+                "r",
+                encoding="utf-8",
+                newline="\n")
+            self._wfile = self._sock.makefile(
+                "w",
+                encoding="utf-8",
+                newline="\n")
+            self._rbfile = self._sock.makefile("rb")
+
+        try:
+            helloline = self._rfile.readline()
+            self._hello(helloline)
+        except Exception:
+            self.disconnect()
+            raise
+
+    def client_disconnect(self):
+        mpd.base.logger.info("Calling MPD disconnect()")
+        if (self._rfile is not None and
+                not isinstance(self._rfile, _NotConnected)):
+            self._rfile.close()
+        if (self._rbfile is not None and
+                not isinstance(self._rbfile, _NotConnected)):
+            self._rbfile.close()
+        if (self._wfile is not None and
+                not isinstance(self._wfile, _NotConnected)):
+            self._wfile.close()
+        if self._sock is not None:
+            self._sock.close()
+        self._reset()
+
+    setattr(MPDClient, '_reset', new_client_reset)
+    setattr(MPDClient, '_read_binary', client_read_binary)
+    setattr(MPDClient, '_execute_binary', client_executecmd_binary)
+    setattr(MPDClient, 'connect', client_connect)
+    setattr(MPDClient, 'disconnect', client_disconnect)
+else:
+    warnings.warn("albumart method already exists, monkeypatch unneeded. Update your code.")
+
+client = MPDClient()
+client.timeout = 0.5
+client.idletimeout = None
+client.connect("localhost", 6600)
+
+try:
+    #monkeypatch: readpicture support
+    #no PR yet
+    needsPicturePatch = False
+    if not hasattr(client, 'readpicture'):
+        if hasattr(client, 'read_picture'):
+            setattr(MPDClient, 'readpicture', MPDClient.read_picture)
+        elif 'readpicture' in client.commands():
+            needsPicturePatch = True
+        else:
+            warnings.warn("readpicture unsupported server-side, adding stub")
+            def readpicture_stub(self, uri):
+                raise CommandError("ReadPicture unsupported")
+            setattr(MPDClient, 'readpicture', readpicture_stub)
+
+    else:
+        warnings.warn("readpicture already support library-side, fix your code")
+
+    if needsPicturePatch:
+        # apply picture patch
+        def readpicture_impl(self, uri):
+            return self._execute_binary("readpicture", [uri])
+
+        setattr(MPDClient, 'readpicture', readpicture_impl)
+    elif 'readpicture' in client.commands():
+        warnings.warn("readpicture supported by server and python, monkeypatch unneeded. Update your code.")
+    else:
+        warnings.warn("readpicture not supported somewhere!")
+
+    def get_picture_bytes(client, uri):
+        try:
+            retVal = client.readpicture(uri)
+            if retVal is not None:
+                return retVal
+        except:
+            pass
+
+        try:
+            retVal = client.albumart(uri)
+            if retVal is not None:
+                return retVal
+        except:
+            pass
+
+        return None
+
+    if len(sys.argv) != 2:
+        exit(2)
+
+    picData = get_picture_bytes(client, sys.argv[1])
+finally:
+    client.disconnect()
+
+if picData is not None:
+    sys.stdout.buffer.write(picData)
+    exit(0)
+else:
+    exit(1)

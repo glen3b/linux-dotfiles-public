@@ -1,0 +1,40 @@
+#!/bin/sh
+. ~/bin/winvmdefs.sh
+
+# button != rclick || execute vm-action-dmenu
+# only execute vm-action-dmenu on right click, not all clicks. i often use lclick for refresh
+[[ "${BLOCK_BUTTON}" -ne "3" ]] || i3-msg -- exec --no-startup-id ~/bin/vm-action-dmenu >/dev/null
+
+#case $BLOCK_BUTTON in
+#    3) mpc $password toggle | filter ;;  # right click, pause/unpause
+#esac
+
+case "$VM_STATUS" in
+    "shut off") echo "<span color='#FF0000'>down</span>"; echo down; echo '#FF0000'; exit ;;
+#    "running") echo up; echo up ;; # up, default color
+esac
+
+if [ "$VM_STATUS" = "running" ]; then
+    RUNNING_VM_COUNT=$(($(virsh list --state-running --uuid | wc -l)-1))
+    SUFFIX=""
+    if [ "$RUNNING_VM_COUNT" -gt 1 ]; then
+        SUFFIX=" <span color='#4AA8FF'>+$((RUNNING_VM_COUNT - 1))</span>";
+    fi
+    # VM xml with leading whitespace stripped
+    DOMAIN_XML="$(virsh dumpxml Windows_Gaming | sed -r 's/^\s+//; /^\s*$/d' | tr -d '\n')"
+    # check if keyboard is attached to VM
+    if ! grep -q "$(grep -E 'vendor|product' ~/.local/share/gaming-vm/usb-passthrough-definitions/keyboard.xml | sed -r 's/^\s+//; /^\s*$/d' | tr -d '\n')" <<< $DOMAIN_XML; then
+        echo "<span color='#FFFC00'>detached$SUFFIX</span>"
+        echo detached
+        echo '#FFFC00' 
+        exit
+    fi
+    echo "<span color='#00FF00'>up$SUFFIX</span>"
+    echo up
+    echo '#00FF00'
+    exit
+fi
+
+echo "<span color='#727272'>unknown</span>"
+echo unknown
+echo '#727272'

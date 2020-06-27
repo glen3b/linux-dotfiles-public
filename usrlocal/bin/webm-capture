@@ -1,0 +1,24 @@
+#!/bin/bash
+SCREENGRAB_PARAMS="$(slop -f '-video_size %wx%h -framerate 12 -i '"$DISPLAY"'+%x,%y')"
+[[ -z "$SCREENGRAB_PARAMS" ]] && exit 1
+#OUTPUT_FILE="$(mktemp -t tmp.XXXXXXX.webm)"
+
+OUTPUT_FILE="$1"
+TIME_PARAMS=""
+[[ -n "$2" ]] && TIME_PARAMS="-t $1" && OUTPUT_FILE="$2"
+
+# without quotes on the screengrab and time parameters, that is deliberate
+# the PID stuff is kind of hacky
+ffmpeg -y -f x11grab $SCREENGRAB_PARAMS $TIME_PARAMS -pix_fmt yuv420p "$OUTPUT_FILE" &
+FFMPEG_PID=$!
+
+yad --notification --listen --no-middle --command="kill $FFMPEG_PID" --image=/usr/share/icons/Adwaita/24x24/legacy/media-record.png <<< "tooltip:WebM screen recording in progress, click to stop" &
+YAD_PID=$!
+
+wait "$FFMPEG_PID"
+kill "$YAD_PID"
+
+# Discord only supports PNG mime type on the clipboard for Linux, from the looks of it
+# https://support.discord.com/hc/en-us/community/posts/360043164391-Allow-pasting-of-mime-types-other-than-image-png
+
+# caller can handle moving the file to the output (e.g. clipboard or fake-drag-drop), we just take the output argument

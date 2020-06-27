@@ -1,0 +1,3 @@
+#!/bin/bash
+find ~/Downloads -mindepth 1 -atime +14 -delete
+find ~/Downloads -mindepth 1 -type d -empty -delete

@@ -1,0 +1,5 @@
+meta.name: MPD
+meta.author: glen3b
+meta.description: mpd daemon control remote.
+meta.platform: linux
+meta.tags.category: media

@@ -1,0 +1,2 @@
+#!/bin/sh
+_JAVA_OPTIONS="$_JAVA_OPTIONS -Dswing.crossplatformlaf=com.sun.java.swing.plaf.gtk.GTKLookAndFeel" exec /usr/bin/minecraft $@

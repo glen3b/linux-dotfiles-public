@@ -1,0 +1,9 @@
+#!/bin/bash
+if [ $# -ne 1 ] || ( [ "$1" != "attach" ] && [ "$1" != "detach" ] ); then
+	>&2 echo "$0: Expected 'attach' or 'detach'"
+	exit 1
+fi
+COMMAND="$1-device"
+set -e
+virsh -c qemu:///system "$COMMAND" Windows_Gaming ~/.local/share/gaming-vm/usb-passthrough-definitions/mouse.xml
+virsh -c qemu:///system "$COMMAND" Windows_Gaming ~/.local/share/gaming-vm/usb-passthrough-definitions/keyboard.xml

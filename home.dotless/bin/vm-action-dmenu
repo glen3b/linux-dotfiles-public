@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+import libvirt
+import sys
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk
+import subprocess
+import psutil
+import signal
+
+def_vm = 'Windows_Gaming'
+usb_action_script = '/home/glen/bin/usb-passthrough'
+monitor_script_dir = '/home/glen/bin/'
+i3block_signal = signal.SIGRTMIN + 10
+
+def quit_with_error(title, description):
+    dialog = Gtk.MessageDialog(None, Gtk.DialogFlags.MODAL, Gtk.MessageType.ERROR,
+    Gtk.ButtonsType.CANCEL, title)
+    if description is not None:
+        dialog.format_secondary_text(description)
+    dialog.run()
+    sys.exit(1)
+
+def invoke_dmenu(completion_list, prompt=None):
+    # build stdin
+    dmenu_input = '\n'.join(completion_list) + '\n'
+    
+    # build command
+    dmenu_cmd = ['dmenu']
+    if prompt is not None:
+        dmenu_cmd.append('-p')
+        dmenu_cmd.append(prompt)
+
+    dmenu_res = subprocess.run(dmenu_cmd, input=dmenu_input, stdout=subprocess.PIPE, universal_newlines=True)
+    if dmenu_res.returncode != 0:
+        # user quit dmenu with escape keypress
+        # gracefully exit our script - user requested termination        
+        sys.exit(0)
+    
+    return dmenu_res.stdout
+
+def lookup_vm(virt_conn, vm_name, prompt_completion=False):
+    try:
+        vm = virt_conn.lookupByName(def_vm)
+    except:
+        # prompt for VM title with dmenu
+        vm_name_stripped = vm_name.lower().strip()
+        
+        # avoid duplicating the error message
+        # construct a candidate list of VMs if prompt_completion is true, otherwise obtain no candidates (which will lead to the error condition, as intended)
+        candidate_list = list(filter(lambda vm: vm.lower().strip().startswith(vm_name_stripped), virt_conn.listDefinedDomains())) if prompt_completion else []
+        if len(candidate_list) == 0:
+            quit_with_error('VM Not Found', 'The given VM, "%s", does not exist.' % vm_name)
+        
+        return lookup_vm(virt_conn, invoke_dmenu(candidate_list, prompt='vm name?'), False)
+
+    return vm
+
+with libvirt.open() as virt_conn:
+    vm = lookup_vm(virt_conn, def_vm)
+    
+    action_list = ['start', 'shutdown']
+    if usb_action_script is not None:
+        action_list.append('attach-peripherals')
+        action_list.append('detach-peripherals')
+    if monitor_script_dir is not None:
+        action_list.append('single-monitor')
+        action_list.append('dual-monitor')
+    action_list.append('synergy-restart')
+    action_list.append('synergy-stop')
+    action_list.append('synergy-start')
+    action_list.append('xautolock-restart')
+    action_list.append('xautolock-stop')
+    action_list.append('xautolock-start')
+
+    # we say virsh, but it's really more like pseudo-virsh
+    action_params = invoke_dmenu(action_list, prompt='virsh').split()
+    if len(action_params) == 0:
+        # user aborted (blank input), gracefully exit
+        sys.exit(0)
+    
+    action = action_params[0].lower().strip()
+    
+    if action == '':
+        # user aborted (blank input), gracefully exit
+        sys.exit(0)
+
+    if not action in action_list:
+        quit_with_error('Unrecognized Action', 'The given action, "%s", is unrecognized.' % action)
+    
+    if len(action_params) == 2 and (action == 'shutdown' or action == 'start'):
+        vm = lookup_vm(virt_conn, action_params[1], prompt_completion=True)
+    elif len(action_params) > 1:
+        quit_with_error('Invalid Parameters', 'Invalid parameters were passed to an action.')
+
+    # actually act
+    try:
+        if action == 'shutdown':
+            vm.shutdown()
+        elif action == 'start':
+            vm.create()
+        elif action.endswith('-peripherals'):
+            subprocess.check_call([usb_action_script, action.split('-')[0]])
+        elif action.endswith('-monitor'):
+            subprocess.check_call([monitor_script_dir + action])
+        elif action.startswith('synergy') or action.startswith('xautolock'):
+            actionsplit = action.split('-')
+            subprocess.check_call(['systemctl', '--user', actionsplit[1], actionsplit[0]])
+    except:
+        quit_with_error('Error Executing Action', 'The following error(s) occurred while attempting to execute action "%s":\n\n%s' % (action, sys.exc_info()[0]))
+
+# after everything, signal i3blocks in case status changed
+if i3block_signal is not None:
+    for proc in psutil.process_iter():
+        if proc.name() == 'i3blocks':
+            #print('Sending signal %d to process %d' % (i3block_signal, proc.pid))
+            proc.send_signal(i3block_signal)

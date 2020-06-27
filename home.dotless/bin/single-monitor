@@ -1,0 +1,18 @@
+#!/bin/sh
+. ~/bin/monitordefs.sh
+
+set -e
+
+if [[ "$@" != *"--no-switch-input"* ]]; then
+    # change secondary monitor input back to DP
+    DEVNAME="$(udevadm info -x -a -p $SECONDDISPLAY_I2C_DEV_SYSPATH | grep 'KERNEL==' | sed -r 's#^[ ]*KERNEL==\"(.*)\"$#/dev/\1#')"
+    ddccontrol -r 0x60 -w 15 "dev:$DEVNAME"
+fi
+
+set +e
+
+xrandr --output "$SECONDARY_OUTPUT" --off
+
+if [[ "$@" != *"--no-restart"* ]]; then
+    systemctl --user is-active --quiet synergy && systemctl --user restart synergy
+fi

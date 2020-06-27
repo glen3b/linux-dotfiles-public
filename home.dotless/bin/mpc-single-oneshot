@@ -1,0 +1,31 @@
+#!/usr/bin/env python
+from mpd import MPDClient
+import argparse
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Arrange for MPD to pause after this song without committing to permanent single mode.')
+    parser.add_argument('--host', dest='mpdHost', default='localhost', help='hostname of MPD server')
+    parser.add_argument('--port', dest='mpdPort', type=int, default=6600, help='port of MPD server')
+    queryArg = parser.add_argument('--query', dest='query', action='store_const', const=True, default=False, help='Query if a single-oneshot pause is requested')
+    parser.add_argument('--toggle', dest='toggle', action='store_const', const=True, default=False, help='Toggle single-oneshot state')
+
+    args = parser.parse_args()
+
+    client = MPDClient()
+    client.connect(args.mpdHost, args.mpdPort)
+
+    if args.query and args.toggle:
+        # hacky, but raises an error, which is what we care about
+        raise argparse.ArgumentError(argument=queryArg, message="Cannot specify both query and toggle")
+
+    if not args.query and not args.toggle:
+        # straight-up enable
+        is_already_oneshot = client.status()['single'] == "oneshot"
+        client.single("oneshot")
+        exit(1 if is_already_oneshot else 0)
+    elif args.query:
+        exit(0 if client.status()['single'] == "oneshot" else 1)
+    else:
+        # toggle
+        client.single(0 if client.status()['single'] == "oneshot" else "oneshot")

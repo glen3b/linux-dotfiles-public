@@ -1,0 +1,4 @@
+#!/bin/bash
+OUTFILE="$(date +'Screengrab_%Y-%m-%d_%H-%M-%S.webm')"
+OUTPATH="$HOME/Videos/$OUTFILE"
+[[ -n "$1" ]] && webm-capture "$1" "$OUTPATH" || webm-capture "$OUTPATH"

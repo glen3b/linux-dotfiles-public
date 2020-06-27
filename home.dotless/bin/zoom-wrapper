@@ -1,0 +1,2 @@
+#!/bin/sh
+"$HOME/bin/zoom-open-existing" || exec /usr/bin/zoom "$@"

@@ -1,0 +1,11 @@
+#!/bin/bash
+# check for tray icon
+EXISTING_ZOOMID="$(xdotool search --onlyvisible --class i3bar | xargs -L 1 xwininfo -children -id | grep -E '^     0x' | grep '"zoom"' | head -n 1 | grep -oE '0x[a-fA-F0-9]+')"
+# if no tray icon, don't try to start
+[[ -n "$EXISTING_ZOOMID" ]] || exit 1
+# check for main window, quit if present
+wmctrl -l | grep -qE 'Zoom($| - [A-Z][a-z]*)' && exit 0
+# click the tray icon to open
+# repeat 2 for reliability
+# this script does 'bad' things (closes) if zoom is already open
+xdotool click --repeat 2 --window "$EXISTING_ZOOMID" 1

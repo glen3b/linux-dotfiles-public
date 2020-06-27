@@ -1,0 +1,2 @@
+#!/bin/bash
+kill "$@" $(xprop _NET_WM_PID | awk -F' = ' '{print $2}')

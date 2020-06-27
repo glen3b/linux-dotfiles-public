@@ -1,0 +1,262 @@
+#!/usr/bin/env python
+from mpd import MPDClient
+import os
+import subprocess
+import pickle
+import html
+import appdirs
+from datetime import datetime
+from datetime import timedelta
+
+spaceGlyph = '<span size="1600"> </span>'
+statefulConfPath = os.path.join(appdirs.user_config_dir(), "mpd-status-block-state.pklb")
+
+def generateProgressBar(progress: float, numGlyphs: int):
+    if numGlyphs < 1:
+        return ""
+
+    numOnGlyphs = round(progress * numGlyphs * 2)
+    numOffGlyphs = (2 * numGlyphs) - numOnGlyphs
+    numHalfGlyphs = numOnGlyphs % 2
+    numOnGlyphs -= numHalfGlyphs
+    numOffGlyphs -= numHalfGlyphs
+    numOnGlyphs = numOnGlyphs // 2
+    numOffGlyphs = numOffGlyphs // 2
+
+    onGlyph = '■'
+    halfGlyph = '◧'
+    offGlyph = '□'
+    
+    return spaceGlyph.join([onGlyph] * numOnGlyphs + [halfGlyph] * numHalfGlyphs + [offGlyph] * numOffGlyphs)
+    #return ('▮' * numOnGlyphs) + ('▯' * numOffGlyphs)
+
+# https://www.xormedia.com/string-truncate-middle-with-ellipsis/
+def truncate_middle(s, n):
+    if len(s) <= n:
+        # string is already short-enough
+        return s
+    # half of the size, minus the 3 .'s
+    n_2 = int(n / 2) - 3
+    # whatever's left
+    n_1 = n - n_2 - 3
+    return '{0}...{1}'.format(s[:n_1], s[-n_2:])
+
+def to_hhmmss(total_secs):
+    hrs = total_secs // 3600
+    total_secs -= (hrs * 3600)
+
+    mins = total_secs // 60
+    total_secs -= (mins * 60)
+    
+    secs = total_secs
+    assert(secs < 60)
+    
+    if hrs > 0:
+        return "%d:%02d:%02d" % (hrs, mins, secs)
+    else:
+        return "%d:%02d" % (mins, secs)
+
+class MpdBlockletSavedState:
+  def __init__(self, songId, songTitle, startIndex, updateTime, numAccelClicks):
+    self.songId = songId
+    self.songTitle = songTitle
+    self.startIndex = startIndex
+    self.updateTime = updateTime
+    self.numAccelClicks = numAccelClicks
+
+
+def load_config_pickle():
+    try:
+        return pickle.load(open(statefulConfPath, 'rb'))
+    except:
+        return None
+
+def save_config_pickle(objToSave):
+    try:
+        pickle.dump(objToSave, open(statefulConfPath, 'wb'), protocol=pickle.HIGHEST_PROTOCOL)
+        return True
+    except:
+        return False
+
+def scrollSubStr(baseStr, idx, length):
+    if idx + length <= len(baseStr):
+        return baseStr[idx:(idx+length)]
+    
+    leftPart = baseStr[idx:]
+    return leftPart + baseStr[0:(length - len(leftPart))]
+
+def scroll_title(songid, title, maxLen):
+    if len(title) <= maxLen:
+        return title
+
+    mandatorySuffix = "..."
+    secondsPerChunk = 3
+    chunkSz = 29
+
+    # require that we don't loop around, and that we preserve a bit of context
+    # in essence, keep chunk sizes sane
+    chunkSz = min(chunkSz, maxLen - 3)
+
+    title += "    "
+    oldState = load_config_pickle()
+    idx = 0
+
+    if oldState is not None and (oldState.songId != songid or oldState.songTitle != title):
+        oldState = None
+    elif oldState is not None and (datetime.now() - oldState.updateTime).total_seconds() >= 10:
+        # timeout
+        oldState = None
+
+    if oldState is not None:
+        if oldState.numAccelClicks >= 2:
+            # force increment
+            chunksAdv = 1
+            newTime = datetime.now()
+        else:
+            # calculate increment based on delta time
+            deltaT = (datetime.now() - oldState.updateTime).total_seconds()
+            chunksAdv = int(deltaT // secondsPerChunk)
+            newTime = oldState.updateTime + timedelta(seconds=(chunksAdv * secondsPerChunk))
+        
+        idx = (oldState.startIndex + (chunksAdv * chunkSz)) % len(title)
+        newState = MpdBlockletSavedState(songid, title, idx, newTime, 0 if chunksAdv > 0 else oldState.numAccelClicks)
+    else:
+        idx = 0
+        newState = MpdBlockletSavedState(songid, title, idx, datetime.now(), 0)
+
+    save_config_pickle(newState)
+
+    # do ourselves a favor in half a second
+    #subprocess.Popen([os.path.join(os.path.expanduser('~'), 'bin', 'i3blocks-ping-mpd-blocklet-delay')])
+
+    return scrollSubStr(title, idx, maxLen - len(mandatorySuffix)) + mandatorySuffix
+
+client = MPDClient()
+client.timeout = 0.5
+client.idletimeout = None
+client.connect("localhost", 6600)
+
+if 'BLOCK_BUTTON' in os.environ:
+    clntStat = client.status()
+    btnId = int(os.environ['BLOCK_BUTTON'])
+    if btnId == 1:
+        # left click
+        # traditionally: previous
+        # us: double click wil accelerate scroll
+        scrollbar_cfg = load_config_pickle()
+        if scrollbar_cfg is not None and (datetime.now() - scrollbar_cfg.updateTime).total_seconds() <= 10:
+            scrollbar_cfg.numAccelClicks += 1
+            save_config_pickle(scrollbar_cfg)
+    elif btnId == 2:
+        # middle click
+        # traditionally: toggle play/pause
+        client.pause()
+    elif btnId == 3:
+        # right click
+        # traditionally: next
+        # us: invoke dmenu
+        subprocess.run(["i3-msg", "--", "exec", "--no-startup-id", "/home/glen/bin/mpdmenu"], shell=False,
+            stdin=None, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+    elif btnId == 4 and 'volume' in clntStat:
+        # scrollwheel up
+        # traditionally: volume up (+10)
+        # us: volume up (+5)
+        client.setvol(max(0, min(int(clntStat['volume'])+5, 100)))
+    elif btnId == 5 and 'volume' in clntStat:
+        # scrollwheel down
+        # traditionally: volume down (-10)
+        # us: volume down (-5)
+        client.setvol(max(0, min(int(clntStat['volume'])-5, 100)))
+    elif btnId == 6:
+        # lower side mouse button
+        # "cd prev:" seek to beginning, unless we're at beginning; then previous
+        clntState = client.status()
+        # don't wanna try to seek when stopped, not that it should matter
+        if clntState['state'] == "stop" or ('elapsed' in clntState and float(clntState['elapsed']) < 3.5):
+            client.previous()
+            if clntState['state'] == "pause":
+                client.pause(1)
+        else:
+            client.seekcur(0)
+    elif btnId == 7:
+        # upper side mouse button
+        client.next()
+
+clntState = client.status()
+
+if clntState['state'] == "stop":
+    exit(0)
+
+currSong = client.playlistid(clntState['songid'])[0]
+outputStr = ""
+
+if 'volume' in clntState:
+    currVolume = int(clntState['volume'])
+    if currVolume >= 70:
+        outputStr += " " # FontAwesome volume-up
+    elif currVolume >= 45:
+        outputStr += " " # FontAwesome volume (pro)
+    elif currVolume >= 20:
+        outputStr += " " # FontAwesome volume-down
+    elif currVolume > 0:
+        outputStr += " " # FontAwesome volume-off
+    else:
+        outputStr += " " # FontAwesome volume-mute
+
+# output:
+# ' <volIcon> <length> <((artist - title)|file):scroll> <progressBar> [pauseIndicator] [singleIndicator] <randomIndicator|repeatIndicator|playlistCountLeft>'
+
+
+baseProgressDuration = 7
+
+if 'title' in currSong:
+    fullTitleStr = currSong['title']
+    if 'artist' in currSong:
+        fullTitleStr = currSong['artist'] + " - " + fullTitleStr
+
+    titlePart = scroll_title(currSong['id'], fullTitleStr, 40)
+else:
+    fileNameStr = currSong['file'].rpartition('/')[2]
+    titlePart = scroll_title(currSong['id'], fileNameStr, 38)
+
+#baseProgressDuration += max(0, int((40 - len(titlePart)) / 15))
+
+outputStr += " [" + to_hhmmss(int(currSong['time'])) + "] " + html.escape(titlePart) + " <span stretch=\"extracondensed\">" + generateProgressBar(float(clntState['elapsed']) / float(clntState['duration']), baseProgressDuration) + "</span>"
+
+needsSpace = True
+
+if clntState['state'] == "pause":
+    # force regular, not solid, free style
+    outputStr += " <span font_desc=\"FontAwesome5Free\"></span>" # FontAwesome pause-circle
+    needsSpace = False
+
+if clntState['single'] == "1" or clntState['single'] == "oneshot":
+    # "single:" will pause after this song
+    outputStr += " " # FontAwesome step-forward
+    needsSpace = False
+
+if clntState['random'] == "1":
+    outputStr += " " # FontAwesome random
+    # show total "pool" size
+    # FontAwesome chevron-{left,right}
+    outputStr += " " + clntState['playlistlength'] + ""
+    needsSpace = False
+elif clntState['repeat'] != "1":
+    # num left in playlist
+    playlistInd = int(clntState['song']) + 1
+    playlistLen = int(clntState['playlistlength'])
+    if playlistInd < playlistLen:
+        outputStr += " +" + str(playlistLen - playlistInd)
+        needsSpace = False
+else:
+    # repeat, indicate as such
+    outputStr += " " # FontAwesome repeat (pro)
+    needsSpace = False
+
+# the progress bar glyphs we use get wonky if they don't have a trailing character of some kind
+# if there's no output after progress bar, add a space
+if needsSpace:
+    outputStr += spaceGlyph
+
+print(outputStr)
+client.disconnect()
