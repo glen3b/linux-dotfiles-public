@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime
 from datetime import timedelta
 
-spaceGlyph = '<span size="1600"> </span>'
+spaceGlyph = '<span size="1600"> </span>' # this is a fancy unicode space
 statefulConfPath = os.path.join(appdirs.user_config_dir(), "mpd-status-block-state.pklb")
 
 def generateProgressBar(progress: float, numGlyphs: int):
@@ -29,7 +29,6 @@ def generateProgressBar(progress: float, numGlyphs: int):
     offGlyph = '□'
     
     return spaceGlyph.join([onGlyph] * numOnGlyphs + [halfGlyph] * numHalfGlyphs + [offGlyph] * numOffGlyphs)
-    #return ('▮' * numOnGlyphs) + ('▯' * numOffGlyphs)
 
 # https://www.xormedia.com/string-truncate-middle-with-ellipsis/
 def truncate_middle(s, n):
@@ -127,19 +126,9 @@ def scroll_title(songid, title, maxLen):
 
     save_config_pickle(newState)
 
-    # do ourselves a favor in half a second
-    #subprocess.Popen([os.path.join(os.path.expanduser('~'), 'bin', 'i3blocks-ping-mpd-blocklet-delay')])
-
     return scrollSubStr(title, idx, maxLen - len(mandatorySuffix)) + mandatorySuffix
 
-client = MPDClient()
-client.timeout = 0.5
-client.idletimeout = None
-client.connect("localhost", 6600)
-
-if 'BLOCK_BUTTON' in os.environ:
-    clntStat = client.status()
-    btnId = int(os.environ['BLOCK_BUTTON'])
+def handle_block_button(btnId):
     if btnId == 1:
         # left click
         # traditionally: previous
@@ -183,81 +172,99 @@ if 'BLOCK_BUTTON' in os.environ:
         # upper side mouse button
         client.next()
 
-clntState = client.status()
+if __name__ == "__main__":
+    # connect to MPD
+    client = MPDClient()
+    client.timeout = 0.5
+    client.idletimeout = None
+    client.connect("localhost", 6600)
 
-if clntState['state'] == "stop":
-    exit(0)
+    # handle action
+    if 'BLOCK_BUTTON' in os.environ:
+        clntStat = client.status()
+        btnId = int(os.environ['BLOCK_BUTTON'])
+        handle_block_button(btnId)
 
-currSong = client.playlistid(clntState['songid'])[0]
-outputStr = ""
+    clntState = client.status()
 
-if 'volume' in clntState:
-    currVolume = int(clntState['volume'])
-    if currVolume >= 70:
-        outputStr += " " # FontAwesome volume-up
-    elif currVolume >= 45:
-        outputStr += " " # FontAwesome volume (pro)
-    elif currVolume >= 20:
-        outputStr += " " # FontAwesome volume-down
-    elif currVolume > 0:
-        outputStr += " " # FontAwesome volume-off
+    if clntState['state'] == "stop":
+        exit(0)
+
+    currSong = client.playlistid(clntState['songid'])[0]
+
+    # output:
+    # ' <volIcon> <length> <((artist - title)|file):scroll> <progressBar> [pauseIndicator] [singleIndicator] <randomIndicator|repeatIndicator|playlistCountLeft>'
+    outputStr = ""
+
+    # prefix volume status
+    if 'volume' in clntState:
+        currVolume = int(clntState['volume'])
+        if currVolume >= 70:
+            outputStr += " " # FontAwesome volume-up
+        elif currVolume >= 45:
+            outputStr += " " # FontAwesome volume (pro)
+        elif currVolume >= 20:
+            outputStr += " " # FontAwesome volume-down
+        elif currVolume > 0:
+            outputStr += " " # FontAwesome volume-off
+        else:
+            outputStr += " " # FontAwesome volume-mute
+
+    # prefix song length
+    outputStr += " [" + to_hhmmss(int(currSong['time'])) + "] "
+
+    # scrolling song title
+    if 'title' in currSong:
+        fullTitleStr = currSong['title']
+        if 'artist' in currSong:
+            fullTitleStr = currSong['artist'] + " - " + fullTitleStr
+
+        titlePart = scroll_title(currSong['id'], fullTitleStr, 40)
     else:
-        outputStr += " " # FontAwesome volume-mute
+        fileNameStr = currSong['file'].rpartition('/')[2]
+        titlePart = scroll_title(currSong['id'], fileNameStr, 38)
 
-# output:
-# ' <volIcon> <length> <((artist - title)|file):scroll> <progressBar> [pauseIndicator] [singleIndicator] <randomIndicator|repeatIndicator|playlistCountLeft>'
+    outputStr += html.escape(titlePart)
+    
+    # trailing track-progress bar
+    outputStr += " <span stretch=\"extracondensed\">" + generateProgressBar(float(clntState['elapsed']) / float(clntState['duration']), 7) + "</span>"
 
+    needsSpace = True
 
-baseProgressDuration = 7
+    # suffix state indicators
 
-if 'title' in currSong:
-    fullTitleStr = currSong['title']
-    if 'artist' in currSong:
-        fullTitleStr = currSong['artist'] + " - " + fullTitleStr
-
-    titlePart = scroll_title(currSong['id'], fullTitleStr, 40)
-else:
-    fileNameStr = currSong['file'].rpartition('/')[2]
-    titlePart = scroll_title(currSong['id'], fileNameStr, 38)
-
-#baseProgressDuration += max(0, int((40 - len(titlePart)) / 15))
-
-outputStr += " [" + to_hhmmss(int(currSong['time'])) + "] " + html.escape(titlePart) + " <span stretch=\"extracondensed\">" + generateProgressBar(float(clntState['elapsed']) / float(clntState['duration']), baseProgressDuration) + "</span>"
-
-needsSpace = True
-
-if clntState['state'] == "pause":
-    # force regular, not solid, free style
-    outputStr += " <span font_desc=\"FontAwesome5Free\"></span>" # FontAwesome pause-circle
-    needsSpace = False
-
-if clntState['single'] == "1" or clntState['single'] == "oneshot":
-    # "single:" will pause after this song
-    outputStr += " " # FontAwesome step-forward
-    needsSpace = False
-
-if clntState['random'] == "1":
-    outputStr += " " # FontAwesome random
-    # show total "pool" size
-    # FontAwesome chevron-{left,right}
-    outputStr += " " + clntState['playlistlength'] + ""
-    needsSpace = False
-elif clntState['repeat'] != "1":
-    # num left in playlist
-    playlistInd = int(clntState['song']) + 1
-    playlistLen = int(clntState['playlistlength'])
-    if playlistInd < playlistLen:
-        outputStr += " +" + str(playlistLen - playlistInd)
+    if clntState['state'] == "pause":
+        # force regular, not solid, free style
+        outputStr += " <span font_desc=\"FontAwesome5Free\"></span>" # FontAwesome pause-circle
         needsSpace = False
-else:
-    # repeat, indicate as such
-    outputStr += " " # FontAwesome repeat (pro)
-    needsSpace = False
 
-# the progress bar glyphs we use get wonky if they don't have a trailing character of some kind
-# if there's no output after progress bar, add a space
-if needsSpace:
-    outputStr += spaceGlyph
+    if clntState['single'] == "1" or clntState['single'] == "oneshot":
+        # "single:" will pause after this song
+        outputStr += " " # FontAwesome step-forward
+        needsSpace = False
 
-print(outputStr)
-client.disconnect()
+    if clntState['random'] == "1":
+        outputStr += " " # FontAwesome random
+        # show total "pool" size
+        # FontAwesome chevron-{left,right}
+        outputStr += " " + clntState['playlistlength'] + ""
+        needsSpace = False
+    elif clntState['repeat'] != "1":
+        # num left in playlist
+        playlistInd = int(clntState['song']) + 1
+        playlistLen = int(clntState['playlistlength'])
+        if playlistInd < playlistLen:
+            outputStr += " +" + str(playlistLen - playlistInd)
+            needsSpace = False
+    else:
+        # repeat, indicate as such
+        outputStr += " " # FontAwesome repeat (pro)
+        needsSpace = False
+
+    # the progress bar glyphs we use get wonky if they don't have a trailing character of some kind
+    # if there's no output after progress bar, add a space
+    if needsSpace:
+        outputStr += spaceGlyph
+
+    print(outputStr)
+    client.disconnect()
