@@ -1,0 +1,131 @@
+#!/bin/bash
+# Using SoX, generates a pair of spectograms for an audio file
+# One over the whole file, and one zoomed to a small chunk
+
+# https://stackoverflow.com/questions/192249/how-do-i-parse-command-line-arguments-in-bash
+POSITIONAL=()
+DURATION="0:02"
+STARTTIME="1:00"
+
+function print_help() {
+    echo "Usage: $0 [OPTION]... FILE..."
+    echo "Generate spectograms for the given audio files."
+    echo "All options with arguments must be space-separated from their value."
+    echo "Some options are mandatory. See below."
+    echo
+    echo "  -f, --full-spectogram=PATH        path to full spectogram output image"
+    echo "  -z, --zoom-spectogram=PATH        path to zoomed spectogram output image"
+    echo "  -d, --duration=LENGTH             duration of spectogram zoomed portion, default 0:02"
+    echo "  -S, --starttime=TIME              start time of spectogram zoomed portion, default 1:00"
+    echo "  -h, --help                        print help and terminate program"
+    echo
+    echo "At least one of full and zoom spectogram arguments must be specified."
+    echo "If only one file is specified, spectogram paths may be files."
+    echo "Otherwise, those options must be directories, and output names will correspond to input files."
+    echo
+    echo "If directories are specified, output files will be named as such:"
+    echo "  FILENAMEWITHOUTEXTENSION_full.png, FILENAMEWITHOUTEXTENSION_zoom.png"
+}
+
+function usage_error() {
+    echo "Error during argument parsing."
+    echo "Usage: $0 [OPTION]... FILE..."
+    echo "Invoke with -h to see help."
+    exit 1
+}
+
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -f|--full-spectogram)
+    FULL_SPECTOGRAM_PATH="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -z|--zoom-spectogram)
+    ZOOM_SPECTOGRAM_PATH="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -d|--duration)
+    DURATION="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -S|--starttime)
+    STARTTIME="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -h|--help)
+    print_help
+    exit 0
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+if [ -z "$FULL_SPECTOGRAM_PATH" -a -z "$ZOOM_SPECTOGRAM_PATH" ]
+then
+    usage_error
+fi
+
+if [ "$#" -lt 1 ]
+then
+    usage_error
+elif [ "$#" -gt 1 ]
+then
+    if [ -n "$FULL_SPECTOGRAM_PATH" -a ! -d "$FULL_SPECTOGRAM_PATH" ]; then usage_error; fi
+    if [ -n "$ZOOM_SPECTOGRAM_PATH" -a ! -d "$ZOOM_SPECTOGRAM_PATH" ]; then usage_error; fi
+fi
+
+# Survived argument parsing
+
+function sox_fullspectogram() {
+    sox "$1" -n remix 1 spectrogram -x 3000 -y 513 -z 120 -w Kaiser -o "$2"
+}
+
+function sox_zoomspectogram() {
+    sox "$1" -n remix 1 spectrogram -X 500 -y 1025 -z 120 -w Kaiser -S "$STARTTIME" -d "$DURATION" -o "$2"
+}
+
+# Full spectograms
+if [ -n "$FULL_SPECTOGRAM_PATH" ]
+then
+    echo "Generating full spectograms..."
+    if [ "$#" -eq 1 -a ! -d "$FULL_SPECTOGRAM_PATH" ]
+    then
+        sox_fullspectogram "$1" "$FULL_SPECTOGRAM_PATH"
+    else
+        for infile in "$@"
+        do
+            filename=$(basename -- "$infile")
+            filename="${filename%.*}"
+            sox_fullspectogram "$infile" "$FULL_SPECTOGRAM_PATH/${filename}_full.png"
+        done
+    fi
+    echo "Done with full spectograms"
+fi
+
+if [ -n "$ZOOM_SPECTOGRAM_PATH" ]
+then
+    echo "Generating zoomed spectograms..."
+    if [ "$#" -eq 1 -a ! -d "$ZOOM_SPECTOGRAM_PATH" ]
+    then
+        sox_zoomspectogram "$1" "$ZOOM_SPECTOGRAM_PATH"
+    else
+        for infile in "$@"
+        do
+            filename=$(basename -- "$infile")
+            filename="${filename%.*}"
+            sox_zoomspectogram "$infile" "$FULL_SPECTOGRAM_PATH/${filename}_zoom.png"
+        done
+    fi
+    echo "Done with zoomed spectograms"
+fi
