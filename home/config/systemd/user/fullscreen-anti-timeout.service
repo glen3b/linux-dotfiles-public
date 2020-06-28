@@ -1,0 +1,5 @@
+[Unit]
+Description=Prevent lockscreen timeouts when in fullscreen applications
+
+[Service]
+ExecStart=/home/glen/bin/xautolock-wiggle-if-fullscreen

@@ -1,0 +1,5 @@
+#!/bin/bash
+# xautolock -enable resets timeouts
+# https://superuser.com/questions/382616/detecting-currently-active-window
+xprop -id $(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2) _NET_WM_STATE 2>/dev/null | grep -q _NET_WM_STATE_FULLSCREEN && xautolock -enable && echo Wiggled lockscreen while fullscreen
+exit 0

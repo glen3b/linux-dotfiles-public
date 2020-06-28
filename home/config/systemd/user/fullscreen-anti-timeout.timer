@@ -1,0 +1,9 @@
+[Unit]
+Description=Prevent lockscreen timeouts when in fullscreen applications
+
+[Timer]
+OnCalendar=*:0/2
+Unit=fullscreen-anti-timeout.service
+
+[Install]
+WantedBy=xorg.target
