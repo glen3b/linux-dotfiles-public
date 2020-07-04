@@ -8,6 +8,14 @@ function exit_usage() {
     exit 2
 }
 
+# tests if $1 is in $2
+elementIn () {
+  local e match="$1"
+  shift
+  for e; do [[ "$e" == "$match" ]] && return 0; done
+  return 1
+}
+
 if [ $# -lt 1 ]
 then
     exit_usage
@@ -45,7 +53,6 @@ then
             # e.g. cancellation is a different status code
             [[ $? -eq 145 ]] || break
         done
-        grep -q OP_SESSION ~/.op/__session || exit 1
     elif [ "$WRAP_MODE" = "lxqt-askpass" ]
     then
         # for the readers at home, stdio-prompt-wrap is a C++ program which parses out prompts from a program which may print many to stdout,
@@ -57,7 +64,6 @@ then
             stdio-prompt-wrap /usr/bin/lxqt-openssh-askpass -- script -qefc "op signin" /dev/null | grep OP_SESSION | tr -d $'\r' > ~/.op/__session
             [[ ${PIPESTATUS[0]} -eq 145 ]] || break
         done
-        grep -q OP_SESSION ~/.op/__session || exit 1
     elif [ "$WRAP_MODE" = "none" ]
     then
         echo "Error: no session present" >&2
@@ -65,15 +71,14 @@ then
     else
         exit_usage
     fi
-
+      
+    grep -q OP_SESSION ~/.op/__session || exit 1
 fi
 
 source ~/.op/__session
 
-if [[ " ${array[@]} " =~ " signout " ]]; then
-    # proxy for "remove token if we're invalidating it"
-    rm ~/.op/__session
-fi
+# proxy for "remove token if we're invalidating it"
+elementIn "signout" "$@" && rm ~/.op/__session
 
 exec op "$@"
 
