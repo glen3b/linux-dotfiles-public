@@ -4,7 +4,7 @@
 # Exits with 2 on usage error
 
 function exit_usage() {
-    echo "Usage: $0 <mode: raw|lxqt-askpass|none> [1password args...]" >&2
+    echo "Usage: $0 <mode: raw|lxqt-askpass|lxqt-askpass-simple|none> [1password args...]" >&2
     exit 2
 }
 
@@ -57,12 +57,21 @@ then
     then
         # for the readers at home, stdio-prompt-wrap is a C++ program which parses out prompts from a program which may print many to stdout,
         #   and invokes a program to prompt the user for responses. if the code were not so disgusting, i might publish it.
-        # if you want to use this script without that program, you could rely on the assumption of exactly one prompt.
         # `op signin` appears to interact with a TTY, so we use an inner script wrapper to help with that
         # I believe the deletion of the carriage return is necessary for that purpose
         while : ; do
             stdio-prompt-wrap /usr/bin/lxqt-openssh-askpass -- script -qefc "op signin" /dev/null | grep OP_SESSION | tr -d $'\r' > ~/.op/__session
             [[ ${PIPESTATUS[0]} -eq 145 ]] || break
+        done
+    elif [ "$WRAP_MODE" = "lxqt-askpass-simple" ]
+    then
+        # version which doesn't need stdio-prompt-wrap
+        # assumes one prompt
+        while : ; do
+            MASTER_PW="$(/usr/bin/lxqt-openssh-askpass "1Password master password:")"
+            [[ $? -eq 0 ]] || break
+            op signin > ~/.op/__session <<< "$MASTER_PW"
+            [[ $? -eq 145 ]] || break
         done
     elif [ "$WRAP_MODE" = "none" ]
     then
