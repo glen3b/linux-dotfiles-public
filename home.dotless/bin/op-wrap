@@ -1,0 +1,83 @@
+#!/bin/bash
+# Wrap the 1Password CLI utility to store a session
+# Exits with 1 on cancellation
+# Exits with 2 on usage error
+
+function exit_usage() {
+    echo "Usage: $0 <mode: raw|lxqt-askpass|none> [1password args...]" >&2
+    exit 2
+}
+
+if [ $# -lt 1 ]
+then
+    exit_usage
+fi
+
+WRAP_MODE="$1"
+shift
+
+# check if persisted session present and valid
+if [ -f ~/.op/__session ]
+then
+    let AGE=$(($(date +%s)-$(date -r ~/.op/__session +%s)))
+    if [ $AGE -gt 1200 ]
+    then
+        # old or empty sessionfile
+        rm ~/.op/__session
+    fi
+fi
+
+if ! [ -f ~/.op/__session -a -s ~/.op/__session ] || ! grep -q OP_SESSION ~/.op/__session
+then
+    [ -e ~/.op/__session ] && rm ~/.op/__session
+    touch ~/.op/__session
+    chmod 600 ~/.op/__session
+    
+    # op returns:
+    # status code 145 on invalid password
+    # status code 130 on ctrl-C
+
+    if [ "$WRAP_MODE" = "raw" ]
+    then
+        while : ; do
+            op signin > ~/.op/__session
+            # only keep looping while the error is "bad password"
+            # e.g. cancellation is a different status code
+            [[ $? -eq 145 ]] || break
+        done
+        grep -q OP_SESSION ~/.op/__session || exit 1
+    elif [ "$WRAP_MODE" = "lxqt-askpass" ]
+    then
+        # for the readers at home, stdio-prompt-wrap is a C++ program which parses out prompts from a program which may print many to stdout,
+        #   and invokes a program to prompt the user for responses. if the code were not so disgusting, i might publish it.
+        # if you want to use this script without that program, you could rely on the assumption of exactly one prompt.
+        # `op signin` appears to interact with a TTY, so we use an inner script wrapper to help with that
+        # I believe the deletion of the carriage return is necessary for that purpose
+        while : ; do
+            stdio-prompt-wrap /usr/bin/lxqt-openssh-askpass -- script -qefc "op signin" /dev/null | grep OP_SESSION | tr -d $'\r' > ~/.op/__session
+            [[ ${PIPESTATUS[0]} -eq 145 ]] || break
+        done
+        grep -q OP_SESSION ~/.op/__session || exit 1
+    elif [ "$WRAP_MODE" = "none" ]
+    then
+        echo "Error: no session present" >&2
+        exit 1
+    else
+        exit_usage
+    fi
+
+fi
+
+source ~/.op/__session
+
+if [[ " ${array[@]} " =~ " signout " ]]; then
+    # proxy for "remove token if we're invalidating it"
+    rm ~/.op/__session
+fi
+
+exec op "$@"
+
+# TODO possibly touch session token
+#OP_RESULT=$?
+#[ $OP_RESULT -eq 0 ] || exit $OP_RESULT
+
