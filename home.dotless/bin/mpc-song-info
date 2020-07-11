@@ -1,0 +1,58 @@
+#!/usr/bin/env python
+from mpd import MPDClient
+from pathlib import Path
+from collections.abc import Iterable
+import mutagen
+
+music_root = Path.home() / 'Music'
+lyric_header_str = '=' * 20
+
+def is_iterable(obj):
+    return isinstance(obj, Iterable)
+
+def print_state_var(state, var, var_friendly=None):
+    if var in state:
+        print((var.capitalize() if var_friendly is None else var_friendly) + ": " + state[var])
+
+def try_print_lyrics(fullpath):
+    try:
+        meta = mutagen.File(fullpath)
+        lyric_str = meta['lyrics']
+        if is_iterable(lyric_str):
+            lyric_str = lyric_str[0]
+        print()
+        print(lyric_header_str)
+        print()
+        print(lyric_str)
+    except:
+        print('No valid lyrics found')
+
+
+client = MPDClient()
+client.timeout = 0.5
+client.idletimeout = None
+client.connect("localhost", 6600)
+
+clnt_state = client.status()
+
+if clnt_state['state'] == "stop":
+    exit(0)
+
+curr_song = client.currentsong()
+
+print_state_var(curr_song, 'albumartist', 'Album Artist')
+print_state_var(curr_song, 'album')
+print_state_var(curr_song, 'artist')
+print_state_var(curr_song, 'title')
+print()
+print_state_var(curr_song, 'genre')
+print_state_var(curr_song, 'date')
+# track and disc number
+if 'track' in curr_song:
+    if 'disc' in curr_song:
+        print("Disc " + curr_song['disc'], end=', ')
+    print("Track " + curr_song['track'])
+if 'file' in curr_song:
+    print("File Type", end=': ')
+    print(Path(curr_song['file']).suffix)
+try_print_lyrics(music_root / curr_song['file'])
