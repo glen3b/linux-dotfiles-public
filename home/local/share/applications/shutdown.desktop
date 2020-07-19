@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Shutdown
+Comment=Cleanly shutdown the host-guest pair
+
+Exec=/home/glen/bin/shutdown-wrap shutdown
+Terminal=false
+StartupNotify=false

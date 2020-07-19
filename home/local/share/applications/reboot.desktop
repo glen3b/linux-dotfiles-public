@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Reboot
+Comment=Cleanly reboot the host-guest pair
+
+Exec=/home/glen/bin/shutdown-wrap reboot
+Terminal=false
+StartupNotify=false

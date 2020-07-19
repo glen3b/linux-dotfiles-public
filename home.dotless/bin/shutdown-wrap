@@ -1,0 +1,40 @@
+#!/bin/bash
+
+. ~/bin/winvmdefs.sh
+
+function exit_usage() {
+    echo "Error: Expected verb" >&2
+    echo "Usage: $0 <shutdown|reboot>" >&2
+    exit 2
+}
+
+if [[ $# -lt 1 ]]
+then
+    exit_usage
+fi
+
+CMD=""
+
+if [[ "$1" == "shutdown" ]]
+then
+    CMD="poweroff"
+elif [[ "$1" == "reboot" ]]
+then
+    CMD="reboot"
+else
+    exit_usage
+fi
+
+if [[ $VM_UP -eq 0 ]]
+then
+    # Windows VM is alive; clean shutdown
+    ~/bin/usb-passthrough detach
+    virsh shutdown Windows_Gaming
+    while [[ $VM_UP -eq 0 ]]
+    do
+        sleep 5
+        . ~/bin/winvmdefs.sh
+    done
+fi
+
+exec $CMD
