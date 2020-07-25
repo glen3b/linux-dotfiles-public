@@ -35,7 +35,7 @@ select_from() {
 deduplicate() {
     local displayflag="$1"
     shift
-    local songlist_verbose=$($MPC -f "$displayflag" find "$@" | sed -E 's#(.*)\) @ (.*/)?(.*)#\1) @ \3 @ \2\3#' | awk -F ' @ ' '{printf "%s @ %s @ ",$1,$2; system("sha256sum <<< '"'"'" $3 "'"'"' | head -c 8"); printf " @ %s\n",$3;}')
+    local songlist_verbose=$($MPC -f "$displayflag" find "$@" | sed -E 's#(.*)\) @ (.*/)?(.*)#\1) @ \3 @ \2\3#' | awk -F ' @ ' '{printf "%s @ %s @ ",$1,$2; title_quotesub=$3; gsub(/'"'"'/, "'"'"'\"'"'"'\"'"'"'", title_quotesub); system("sha256sum <<< '"'"'" title_quotesub "'"'"' | head -c 8"); printf " @ %s\n",$3;}')
     if [[ "$(wc -l <<< "$songlist_verbose")" -gt 1 ]]
     then
         # lots of songs, we need to disambiguate
