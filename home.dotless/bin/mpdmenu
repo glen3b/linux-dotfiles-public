@@ -129,6 +129,14 @@ remove() {
     return 1
 }
 
+switch_output() {
+    local outputs=$($MPC outputs | sed -r 's/^\s*Output\s+[0-9]+\s*\((.*)\)\s*is.**$/\1/g')
+    local output=$(select_from "$outputs" "output")
+
+    [ -n "$output" ] && $MPC enable only "$output"
+    return 1
+}
+
 jump() {
     local playlist=$(get_playlist)
     local song=$(select_from "$playlist" "song")
@@ -209,7 +217,7 @@ random_toggle() {
 }
 
 while true; do
-    action=$(DMENU "Add Artist\nAdd Album\nAdd Song\nClear\nCrop\nRemove\nShuffle\nRandom\nJump\nHoist\nToggle\nPlay\nPause\nSingle Oneshot\nSingle\nStop\nNext\nPrev" "What to do?")
+    action=$(DMENU "Add Artist\nAdd Album\nAdd Song\nClear\nCrop\nRemove\nShuffle\nRandom\nJump\nHoist\nToggle\nPlay\nPause\nSingle Oneshot\nSingle\nSwitch Output\nStop\nNext\nPrev" "What to do?")
     case $action in
         "Add Artist") add_from_artist;;
         "Add Album") add_from_album;;
@@ -228,6 +236,7 @@ while true; do
         Prev) prev;;
         "Single Oneshot") single_oneshot_toggle;;
         Single) single_toggle;;
+        "Switch Output") switch_output;;
         "Random") random_toggle;;
         "") exit 0;;
         *) false;;
