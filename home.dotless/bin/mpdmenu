@@ -222,14 +222,14 @@ random_toggle() {
 }
 
 while true; do
-    action=$(DMENU "Add Artist\nAdd Album\nAdd Song\nClear\nCrop\nSong Info\nRemove\nShuffle\nRandom\nJump\nHoist\nToggle\nPlay\nPause\nSingle Oneshot\nSingle\nSwitch Output\nStop\nNext\nPrev" "What to do?")
+    action=$(DMENU "Add Artist\nAdd Album\nAdd Song\nClear\nCrop\nInfo\nRemove\nShuffle\nRandom\nJump\nHoist\nToggle\nPlay\nPause\nSingle Oneshot\nSingle\nSwitch Output\nStop\nNext\nPrev" "What to do?")
     case $action in
         "Add Artist") add_from_artist;;
         "Add Album") add_from_album;;
         "Add Song") add_direct;;
         Clear) clear;;
         Crop) crop;;
-        "Song Info") song_info_dialog;;
+        Info) song_info_dialog;;
         Remove) remove;;
         Shuffle) shuffle;;
         Jump) jump;;
