@@ -1,8 +1,40 @@
 #!/bin/bash
 # Based on https://github.com/k00mi/mpdmenu
-MPC="mpc --quiet -p 6600"
-export BEMENU_BACKEND=curses
-DMENU_EXECUTABLE="${1:-dmenu}"
+
+MPD_PORT="6600"
+# TODO set intelligent default for GUI vs TUI
+DMENU_EXECUTABLE="dmenu"
+
+POSITIONAL=()
+while [[ $# -gt 0 ]]
+do
+key="$1"
+
+case $key in
+    -d|--dmenu)
+    DMENU_EXECUTABLE="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    -p|--port)
+    MPD_PORT="$2"
+    shift # past argument
+    shift # past value
+    ;;
+    *)    # unknown option
+    POSITIONAL+=("$1") # save it in an array for later
+    shift # past argument
+    ;;
+esac
+done
+set -- "${POSITIONAL[@]}" # restore positional parameters
+
+MPC="mpc --quiet -p $MPD_PORT"
+
+if [ "$DMENU_EXECUTABLE" == "bemenu" ]
+then
+    export BEMENU_BACKEND=curses
+fi
 
 # a disambiguation template
 # mpc -f '[[%albumartist%]|[%artist%]] - %album% (%date%) @ %file%' find title 'Somebody To Love' | sed -E 's#(.*)\) @ (.*/)?(.*)#\1) @ \3 @ \2\3#' | awk -F ' @ ' '{printf "%s @ %s @ ",$1,$2; system("sha256sum <<< '"'"'" $3 "'"'"' | head -c 8"); print "";}'
