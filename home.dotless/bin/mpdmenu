@@ -2,8 +2,13 @@
 # Based on https://github.com/k00mi/mpdmenu
 
 MPD_PORT="6600"
-# TODO set intelligent default for GUI vs TUI
 DMENU_EXECUTABLE="dmenu"
+
+# intelligent default for GUI vs TUI: when using TTY, use bemenu (which gets defaulted to `curses` backend later)
+if [ -t 0 ]
+then
+    DMENU_EXECUTABLE="bemenu"
+fi
 
 POSITIONAL=()
 while [[ $# -gt 0 ]]
@@ -31,7 +36,7 @@ set -- "${POSITIONAL[@]}" # restore positional parameters
 
 MPC="mpc --quiet -p $MPD_PORT"
 
-if [ "$DMENU_EXECUTABLE" == "bemenu" ]
+if [ -z "$BEMENU_BACKEND" -a "$DMENU_EXECUTABLE" == "bemenu" ]
 then
     export BEMENU_BACKEND=curses
 fi
