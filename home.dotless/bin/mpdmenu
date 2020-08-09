@@ -4,8 +4,11 @@
 MPD_PORT="6600"
 DMENU_EXECUTABLE="dmenu"
 
+[ -t 0 ]
+IS_INTERACTIVE_TERMINAL=$?
+
 # intelligent default for GUI vs TUI: when using TTY, use bemenu (which gets defaulted to `curses` backend later)
-if [ -t 0 ]
+if (( IS_INTERACTIVE_TERMINAL == 0 ))
 then
     DMENU_EXECUTABLE="bemenu"
 fi
@@ -174,8 +177,17 @@ switch_output() {
     return 1
 }
 
+show_dialog() {
+    if (( IS_INTERACTIVE_TERMINAL == 0 ))
+    then
+        less
+    else
+        yad --text-info --no-buttons --title "MPD Song Info"
+    fi
+}
+
 song_info_dialog() {
-    ~/bin/mpc-song-info | yad --text-info --no-buttons --title "MPD Song Info"
+    ~/bin/mpc-song-info | show_dialog
     return 0
 }
 
