@@ -66,10 +66,9 @@ then
     elif [ "$WRAP_MODE" = "lxqt-askpass-simple" ]
     then
         # version which doesn't need stdio-prompt-wrap
-        # assumes two prompts
+        # assumes one prompt
         while : ; do
             MASTER_PW="$(/usr/bin/lxqt-openssh-askpass "1Password master password:")"
-            MASTER_PW="$MASTER_PW"$'\n'"$(/usr/bin/lxqt-openssh-askpass "1Password 2FA token:")"
             [[ $? -eq 0 ]] || break
             op signin > ~/.op/__session <<< "$MASTER_PW"
             [[ $? -eq 145 ]] || break
