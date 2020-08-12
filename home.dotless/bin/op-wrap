@@ -89,6 +89,9 @@ source ~/.op/__session
 # proxy for "remove token if we're invalidating it"
 elementIn "signout" "$@" && rm ~/.op/__session
 
+# special: if we're only signing in / asserting ssesion existence, no need for underlying clal
+[[ $# -eq 1 ]] && [[ "$@[0]" -eq "signin-assert" ]] && exit 0
+
 exec op "$@"
 
 # TODO possibly touch session token
