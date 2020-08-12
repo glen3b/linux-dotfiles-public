@@ -90,7 +90,11 @@ source ~/.op/__session
 elementIn "signout" "$@" && rm ~/.op/__session
 
 # special: if we're only signing in / asserting ssesion existence, no need for underlying clal
-[[ $# -eq 1 ]] && [[ "$@[0]" -eq "signin-assert" ]] && exit 0
+if [[ $# -eq 1 ]] && [[ "$@[0]" -eq "signin-assert" ]]
+then
+    [ -f ~/.op/__session -a -s ~/.op/__session ] && grep -q OP_SESSION ~/.op/__session
+    exit $?
+fi
 
 exec op "$@"
 
