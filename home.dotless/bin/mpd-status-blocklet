@@ -157,8 +157,9 @@ def handle_block_button(btnId):
         # traditionally: volume down (-10)
         # us: volume down (-5)
         client.setvol(max(0, min(int(clntStat['volume'])-5, 100)))
-    elif btnId == 6:
+    elif btnId == 6 or btnId == 8:
         # lower side mouse button
+        # (different ID w/ and w/o synergy)
         # "cd prev:" seek to beginning, unless we're at beginning; then previous
         clntState = client.status()
         # don't wanna try to seek when stopped, not that it should matter
@@ -168,8 +169,9 @@ def handle_block_button(btnId):
                 client.pause(1)
         else:
             client.seekcur(0)
-    elif btnId == 7:
+    elif btnId == 7 or btnId == 9:
         # upper side mouse button
+        # (different ID w/ and w/o synergy)
         client.next()
 
 if __name__ == "__main__":
