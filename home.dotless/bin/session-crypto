@@ -15,7 +15,7 @@ fi
 
 if [ "$1" = "encrypt" ]
 then
-    exec gpg --symmetric --batch --passphrase-file ~/.sessiontokens.key 2>/dev/null
+    exec gpg -a --symmetric --batch --passphrase-file ~/.sessiontokens.key 2>/dev/null
 elif [ "$1" = "decrypt" ]
 then
     exec gpg --batch --passphrase-file ~/.sessiontokens.key -o - -d 2>/dev/null
