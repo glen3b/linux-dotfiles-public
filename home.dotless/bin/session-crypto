@@ -1,0 +1,24 @@
+#!/bin/bash
+# Perform cryptography using a common shared key, intended for session tokens
+# The idea is to protect against accidentally copying a session token file
+# The session token key file is required for anything to be usable
+
+function print_usage() {
+    echo "Usage: $0 <encrypt|decrypt>" >&2
+    exit 1    
+}
+
+if ! [ $# -eq 1 ]
+then
+    print_usage
+fi
+
+if [ "$1" = "encrypt" ]
+then
+    exec gpg --symmetric --batch --passphrase-file ~/.sessiontokens.key 2>/dev/null
+elif [ "$1" = "decrypt" ]
+then
+    exec gpg --batch --passphrase-file ~/.sessiontokens.key -o - -d 2>/dev/null
+else
+    print_usage
+fi
