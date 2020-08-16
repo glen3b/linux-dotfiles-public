@@ -35,7 +35,7 @@ then
     fi
 fi
 
-if ! [ -f ~/.op/__session -a -s ~/.op/__session ] || ! grep -q OP_SESSION ~/.op/__session
+if ! [ -f ~/.op/__session -a -s ~/.op/__session ] || ! ~/bin/session-crypto decrypt < ~/.op/__session | grep -q OP_SESSION
 then
     [ -e ~/.op/__session ] && rm ~/.op/__session
     touch ~/.op/__session
@@ -48,7 +48,7 @@ then
     if [ "$WRAP_MODE" = "raw" ]
     then
         while : ; do
-            op signin > ~/.op/__session
+            op signin | ~/bin/session-crypto encrypt > ~/.op/__session
             # only keep looping while the error is "bad password"
             # e.g. cancellation is a different status code
             [[ $? -eq 145 ]] || break
@@ -60,7 +60,7 @@ then
         # `op signin` appears to interact with a TTY, so we use an inner script wrapper to help with that
         # I believe the deletion of the carriage return is necessary for that purpose
         while : ; do
-            stdio-prompt-wrap /usr/bin/lxqt-openssh-askpass -- script -qefc "op signin" /dev/null | grep OP_SESSION | tr -d $'\r' > ~/.op/__session
+            stdio-prompt-wrap /usr/bin/lxqt-openssh-askpass -- script -qefc "op signin" /dev/null | grep OP_SESSION | tr -d $'\r' | ~/bin/session-crypto encrypt > ~/.op/__session
             [[ ${PIPESTATUS[0]} -eq 145 ]] || break
         done
     elif [ "$WRAP_MODE" = "lxqt-askpass-simple" ]
@@ -70,7 +70,7 @@ then
         while : ; do
             MASTER_PW="$(/usr/bin/lxqt-openssh-askpass "1Password master password:")"
             [[ $? -eq 0 ]] || break
-            op signin > ~/.op/__session <<< "$MASTER_PW"
+            op signin <<< "$MASTER_PW" | ~/bin/session-crypto encrypt > ~/.op/__session
             [[ $? -eq 145 ]] || break
         done
     elif [ "$WRAP_MODE" = "none" ]
@@ -81,20 +81,20 @@ then
         exit_usage
     fi
       
-    grep -q OP_SESSION ~/.op/__session || exit 1
+    ~/bin/session-crypto decrypt < ~/.op/__session | grep -q OP_SESSION || exit 1
 fi
 
-source ~/.op/__session
+eval "$(~/bin/session-crypto decrypt < ~/.op/__session)"
+
+# special: if we're only signing in / asserting ssesion existence, no need for underlying call
+if [[ $# -eq 1 ]] && [[ "$@[0]" -eq "signin-assert" ]]
+then
+    [ -f ~/.op/__session -a -s ~/.op/__session ] && ~/bin/session-crypto decrypt < ~/.op/__session | grep -q OP_SESSION
+    exit $?
+fi
 
 # proxy for "remove token if we're invalidating it"
 elementIn "signout" "$@" && rm ~/.op/__session
-
-# special: if we're only signing in / asserting ssesion existence, no need for underlying clal
-if [[ $# -eq 1 ]] && [[ "$@[0]" -eq "signin-assert" ]]
-then
-    [ -f ~/.op/__session -a -s ~/.op/__session ] && grep -q OP_SESSION ~/.op/__session
-    exit $?
-fi
 
 exec op "$@"
 
