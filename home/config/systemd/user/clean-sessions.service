@@ -1,0 +1,6 @@
+[Unit]
+Description=Clean old session files regularly
+
+[Service]
+ExecStart=/home/glen/bin/clean-sessions
+WorkingDirectory=/home/glen

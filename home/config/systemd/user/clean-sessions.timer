@@ -1,0 +1,10 @@
+[Unit]
+Description=Clean old session files regularly
+
+[Timer]
+OnCalendar=00/2:00
+Persistent=true
+Unit=clean-sessions.service
+
+[Install]
+WantedBy=timers.target
