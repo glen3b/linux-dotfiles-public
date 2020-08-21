@@ -6,7 +6,7 @@ set -e
 cd "$( dirname "${BASH_SOURCE[0]}" )"
 . install-common.sh
 echo Dotfile installer starting
-export INSTALL_DATE_SIGNATURE="Installed from dotfile repository at $(pwd) (commit $(git rev-parse --short HEAD)) on $(date)"
+export INSTALL_DATE_SIGNATURE="Installed from dotfile repository at $(pwd) (commit $(git describe --long --always --dirty --exclude=* --abbrev=8)) on $(date)"
 echo Installing files in homedirectory...
 # hacky approach
 # start with 'home' (which auto-prepends dots)
