@@ -229,7 +229,7 @@ if __name__ == "__main__":
     outputStr += html.escape(titlePart)
     
     # trailing track-progress bar
-    outputStr += " <span stretch=\"extracondensed\">" + generateProgressBar(float(clntState['elapsed']) / float(clntState['duration']), 7) + "</span>"
+    outputStr += " <span stretch=\"extracondensed\">" + generateProgressBar(float(clntState['elapsed']) / float(clntState['duration']), 8) + "</span>"
 
     needsSpace = True
 
