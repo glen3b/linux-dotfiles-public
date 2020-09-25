@@ -1,0 +1,5 @@
+meta.name: Screen Power Control
+meta.author: glen3b
+meta.description: Control your monitor power and screen lock.
+meta.platform: linux
+meta.tags.category: utility
