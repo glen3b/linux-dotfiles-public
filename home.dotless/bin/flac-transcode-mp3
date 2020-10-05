@@ -1,0 +1,110 @@
+#!/bin/bash
+set -e
+
+function print_usage() {
+    echo "$0: transcode a folder of FLACs to fixed- and variable-bitrate MP3s"
+    echo "Usage: $0 <FLAC-DIR-PATH>"
+}
+
+function exit_usage() {
+    print_usage >&2
+    exit 1
+}
+
+if [[ $# -ne 1 ]]; then exit_usage; fi
+if [[ ! -d "$1" ]]; then exit_usage; fi
+
+SRC_DIR="$1"
+
+# Require "FLAC" indicator in the source directory name
+if [[ "$SRC_DIR" != *"FLAC"* ]]; then
+  echo "Error: 'FLAC' must be present in source directory path" >&2
+  exit_usage
+fi
+
+DST_DIR_320="${SRC_DIR/FLAC/MP3 320}"
+DST_DIR_V0="${SRC_DIR/FLAC/MP3 V0}"
+
+if [[ -d "$DST_DIR_320" || -d "$DST_DIR_V0" ]]; then
+  echo "Error: destination directory exists" >&2
+  exit_usage
+fi
+
+if [[ "$DST_DIR_320" == "$SRC_DIR" || "$DST_DIR_V0" == "$SRC_DIR" || "$DST_DIR_320" == "$DST_DIR_V0" ]]
+then
+    echo "Error: source and destination directory are the same" >&2
+    exit_usage
+fi
+
+mkdir "$DST_DIR_320" "$DST_DIR_V0"
+
+function get_flac_metadata() {
+    metaflac --list --block-type VORBIS_COMMENT "$1" | grep -P '^\s*comment\[' | cut -d: -f2-
+}
+
+# $1: tagname
+# $2: flac meta dump
+function get_meta_tag() {
+    grep -iE '^\s*'"$1"'=' <<< "$2" | cut -d= -f2
+}
+
+# $1: dst dir name
+# $2, $3...: transcode flags
+function make_target() {
+    DST_DIR="$1"
+    DST_DIR_ABS="$(realpath "$DST_DIR")"
+    shift
+    # mirror directory structure
+    # https://superuser.com/questions/299938/how-can-i-recursively-copy-files-by-file-extension-preserving-directory-structu
+    find "$SRC_DIR" -mindepth 1 -type d -printf '%P\0' | ( cd "$DST_DIR_ABS"; xargs -r0 mkdir -p; )
+    (
+        # copy nonmusic files
+        cd "$SRC_DIR"
+        find . -type f \( -not -name '*.flac' \) -print0 | cpio -p0m "$DST_DIR_ABS"
+        # copy music files
+        # https://stackoverflow.com/questions/8677546/reading-null-delimited-strings-through-a-bash-loop
+        while IFS= read -r -d $'\0' file; do
+            # obtain metadata: bash variables are vorbis tags
+            FLAC_META="$(get_flac_metadata "$file")"
+            # normal tags
+            TITLE="$(get_meta_tag TITLE "$FLAC_META")"
+            ARTIST="$(get_meta_tag ARTIST "$FLAC_META")"
+            ALBUM="$(get_meta_tag ALBUM "$FLAC_META")"
+            DATE="$(get_meta_tag DATE "$FLAC_META")"
+            # track number has special handling for ID3 conversion
+            TRACKNUMBER="$(get_meta_tag TRACKNUMBER "$FLAC_META")"
+            TOTALTRACKS="$(get_meta_tag TOTALTRACKS "$FLAC_META")"
+            # genre must be capitalized in MP3
+            GENRE="$(get_meta_tag GENRE "$FLAC_META" | tr '[a-z]' '[A-Z]')"
+            # we use ID3 comment as a synthesis of multiple vorbis tags
+            COMMENT="$(get_meta_tag COMMENT "$FLAC_META")"
+            CDDB="$(get_meta_tag CDDB "$FLAC_META")"
+
+            # patch comment to include CDDB
+            if [[ -z "$COMMENT" || -z "$CDDB" ]]
+            then
+                # at most one variable has content, no delimiter
+                COMMENT="${COMMENT}${CDDB}"
+            else
+                COMMENT="${COMMENT} || CDDB:${CDDB}"
+            fi
+
+            # patch track number to include total
+            if [[ ! -z "$TRACKNUMBER" && ! -z "$TOTALTRACKS" ]]
+            then
+                TRACKNUMBER="${TRACKNUMBER}/${TOTALTRACKS}"
+            fi
+
+            # https://unix.stackexchange.com/questions/415990/how-can-i-expand-a-quoted-variable-to-nothing-if-its-empty
+            flac -d -s -c "$file" | lame --silent \
+                ${TITLE:+"--tt"} ${TITLE:+"$TITLE"} ${ARTIST:+"--ta"} ${ARTIST:+"$ARTIST"} \
+                ${ALBUM:+"--tl"} ${ALBUM:+"$ALBUM"} ${DATE:+"--ty"} ${DATE:+"$DATE"} \
+                ${GENRE:+"--tg"} ${GENRE:+"$GENRE"} ${TRACKNUMBER:+"--tn"} ${TRACKNUMBER:+"$TRACKNUMBER"} \
+                ${COMMENT:+"--tc"} ${COMMENT:+"$COMMENT"} \
+                "$@" - "$DST_DIR_ABS/${file/%.flac/.mp3}"
+        done < <(find . -type f -name '*.flac' -printf '%P\0')
+    )
+}
+
+make_target "$DST_DIR_320" -b 320:h
+make_target "$DST_DIR_V0" -V 0
