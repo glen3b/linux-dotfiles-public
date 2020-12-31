@@ -117,7 +117,7 @@ prettyselect_song() {
     fi
     # if song empty (e.g. cancelled selection), break out of function
     [[ -z "$chosen_song_entry" ]] && return 1
-    awk -F ' @ ' -v chosen_desc="${chosen_song_entry%% @ *}" -v chosen_sha="${chosen_song_entry##* @ }" '$1 == chosen_desc && $3 == chosen_sha {print $2}' <<< "$songlist_verbose"
+    awk -F '@@%@@' -v chosen_desc="${chosen_song_entry%% @ *}" -v chosen_sha="${chosen_song_entry##* @ }" '$1 == chosen_desc && $3 == chosen_sha {print $2}' <<< "$songlist_verbose"
 }
 
 verify_playing() {
