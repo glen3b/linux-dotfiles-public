@@ -50,6 +50,7 @@ fi
 # max height for vertical menu
 height=12
 default_dedup_displaypattern='[[%albumartist%]|[%artist%]] - %album% (%date%) @ %file%'
+default_prettyselect_displaypattern='[[[[%disc%:]%track% ]%title%]|[%file%]]@@#%@@%file%'
 
 DMENU() {
     # Vertical menu if $3 is given
@@ -89,6 +90,35 @@ deduplicate() {
         # 0 or 1, so just return the output
         awk -F ' @ ' '{print $4}' <<< "$songlist_verbose"
     fi
+}
+
+# selects from a list of candidate songs unambiguously, showing details as wanted
+# formatflag must cause to be rendered whatever human readable description is desired,
+#   followed by '@@#%@@' (escapes to @@%@@) then the filename
+#   example: '[[[[%disc%:]%track% ]%title%]|[%file%]]@@#%@@%file%'
+# <formatflag> <allStr> <mpcFilterArgs>
+# arguments are mpc filter params
+# differs from deduplicate in that it does not attempt to display file data
+# stdout will be a file list to pipe to MPC ADD
+prettyselect_song() {
+    local formatstr="$1"
+    local allstr="$2"
+    shift
+    shift
+    # maps desc,file -> desc,file,sha256
+    local songlist_verbose="$($MPC -f "$formatstr" find "$@" | perl -MDigest::SHA -ne 'print $1."@@%@@".$2."@@%@@".substr(Digest::SHA::sha256_hex($2), 0, 10)."\n" if /^(.+)@@%@@(.+)$/')"
+    echo "$songlist_verbose" >&2
+    # maps songlist_verbose -> desc,sha256 (for readability in face of long filenames)
+    local songlist="$(awk -F '@@%@@' 'BEGIN{OFS=" @ "} {print $1,$3}' <<< $songlist_verbose)"
+    local chosen_song_entry="$(select_from "${songlist}\n$allstr" "song")"
+    if [[ "$chosen_song_entry" == "$allstr" ]]
+    then
+        $MPC -f "%file%" find "$@"
+        return 0
+    fi
+    # if song empty (e.g. cancelled selection), break out of function
+    [[ -z "$chosen_song_entry" ]] && return 1
+    awk -F ' @ ' -v chosen_desc="${chosen_song_entry%% @ *}" -v chosen_sha="${chosen_song_entry##* @ }" '$1 == chosen_desc && $3 == chosen_sha {print $2}' <<< "$songlist_verbose"
 }
 
 verify_playing() {
@@ -159,6 +189,26 @@ add_from_artist() {
     fi
 
     return 1
+}
+
+# adds via full drilldown
+add_drilldown() {
+    all="[ALL]"
+
+    local artist=$(select_from "$($MPC list albumartist)\n$all" "album artist")
+
+    if [ "$artist" = "$all" ]; then
+        $MPC listall | $MPC add;
+    elif [ -n "$artist" ]; then
+        local albums=$($MPC list Album AlbumArtist "$artist")
+        local album=$(select_from "$albums\n$all" "album")
+
+        if [ "$album" = "$all" ]; then
+            $MPC findadd AlbumArtist "$artist"
+        elif [ -n "$album" ]; then
+            prettyselect_song "$default_prettyselect_displaypattern" "$all" Album "$album" AlbumArtist "$artist" | $MPC add
+        fi
+    fi
 }
 
 remove() {
@@ -271,8 +321,9 @@ random_toggle() {
 }
 
 while true; do
-    action=$(DMENU "Add Artist\nAdd Album\nAdd Song\nClear\nCrop\nInfo\nRemove\nShuffle\nRandom\nJump\nHoist\nToggle\nPlay\nPause\nSingle Oneshot\nSingle\nSwitch Output\nStop\nNext\nPrev" "What to do?")
+    action=$(DMENU "Add (Full)\nAdd Artist\nAdd Album\nAdd Song\nClear\nCrop\nInfo\nRemove\nShuffle\nRandom\nJump\nHoist\nToggle\nPlay\nPause\nSingle Oneshot\nSingle\nSwitch Output\nStop\nNext\nPrev" "What to do?")
     case $action in
+        "Add (Full)") add_drilldown;;
         "Add Artist") add_from_artist;;
         "Add Album") add_from_album;;
         "Add Song") add_direct;;
