@@ -256,34 +256,9 @@ load_playlist() {
     return 1
 }
 
-toggle(){
-    $MPC toggle
-    return 0
-}
-
-play(){
-    $MPC play
-    return 0
-}
-
-pause(){
-    $MPC pause
-    return 1
-}
-
 stop(){
     $MPC stop
     return 0
-}
-
-next(){
-    $MPC next
-    return 1
-}
-
-prev(){
-    $MPC prev
-    return 1
 }
 
 shuffle(){
@@ -328,7 +303,7 @@ random_toggle() {
 }
 
 while true; do
-    action=$(DMENU "Add (Full)\nAdd Artist\nAdd Album\nAdd Song\nClear\nCrop\nInfo\nRemove\nShuffle\nRandom\nJump\nHoist\nToggle\nPlay\nPause\nSingle Oneshot\nSingle\nSwitch Output\nLoad Playlist\nStop\nNext\nPrev" "What to do?")
+    action=$(DMENU "Add (Full)\nAdd Artist\nAdd Album\nAdd Song\nClear\nCrop\nInfo\nRemove\nShuffle\nRandom\nJump\nHoist\nSingle Oneshot\nSingle\nSwitch Output\nLoad Playlist\nStop" "What to do?")
     case $action in
         "Add (Full)") add_drilldown;;
         "Add Artist") add_from_artist;;
@@ -341,13 +316,8 @@ while true; do
         Shuffle) shuffle;;
         Jump) jump;;
         Hoist) hoist;;
-        Pause) pause;;
-        Toggle) toggle;;
-        Play) play;;
         "Load Playlist") load_playlist;;
         Stop) stop;;
-        Next) next;;
-        Prev) prev;;
         "Single Oneshot") single_oneshot_toggle;;
         Single) single_toggle;;
         "Switch Output") switch_output;;
