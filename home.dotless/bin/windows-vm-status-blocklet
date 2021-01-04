@@ -9,14 +9,17 @@
 #    3) mpc $password toggle | filter ;;  # right click, pause/unpause
 #esac
 
-case "$VM_STATUS" in
-    "shut off") echo "<span color='#FF0000'>down</span>"; echo down; echo '#FF0000'; exit ;;
-#    "running") echo up; echo up ;; # up, default color
-esac
+RUNNING_VM_COUNT=$(($(virsh list --state-running --uuid | wc -l)-1))
+SUFFIX=""
+if [ "$VM_STATUS" = "shut off" ]; then
+    if [ "$RUNNING_VM_COUNT" -gt 0 ]; then
+        SUFFIX=" <span color='#4AA8FF'>+${RUNNING_VM_COUNT}</span>";
+    fi
+    echo "<span color='#FF0000'>down$SUFFIX</span>"; echo down; echo '#FF0000'
+    exit
+fi
 
 if [ "$VM_STATUS" = "running" ]; then
-    RUNNING_VM_COUNT=$(($(virsh list --state-running --uuid | wc -l)-1))
-    SUFFIX=""
     if [ "$RUNNING_VM_COUNT" -gt 1 ]; then
         SUFFIX=" <span color='#4AA8FF'>+$((RUNNING_VM_COUNT - 1))</span>";
     fi
