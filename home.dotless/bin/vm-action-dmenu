@@ -96,8 +96,14 @@ with libvirt.open() as virt_conn:
     # actually act
     try:
         if action == 'shutdown':
+            if monitor_script_dir is not None:
+                subprocess.check_call([monitor_script_dir + 'dual-monitor'])
+            if usb_action_script is not None:
+                subprocess.check_call([usb_action_script, 'detach'])
             vm.shutdown()
         elif action == 'start':
+            if monitor_script_dir is not None:
+                subprocess.check_call([monitor_script_dir + 'single-monitor'])
             vm.create()
         elif action.endswith('-peripherals'):
             subprocess.check_call([usb_action_script, action.split('-')[0]])
