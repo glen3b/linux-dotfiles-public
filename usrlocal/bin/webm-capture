@@ -12,7 +12,7 @@ TIME_PARAMS=""
 ffmpeg -y -f x11grab $SCREENGRAB_PARAMS $TIME_PARAMS -pix_fmt yuv420p "$OUTPUT_FILE" &
 FFMPEG_PID=$!
 
-yad --notification --listen --no-middle --command="kill $FFMPEG_PID" --image=/usr/share/icons/Adwaita/24x24/legacy/media-record.png <<< "tooltip:WebM screen recording in progress, click to stop" &
+{ echo "tooltip:WebM screen recording in progress, click to stop"; yes '' | pv -qL 1; } | yad --notification --listen --no-middle --command="kill $FFMPEG_PID" --image=/usr/share/icons/Adwaita/24x24/legacy/media-record.png &
 YAD_PID=$!
 
 wait "$FFMPEG_PID"
