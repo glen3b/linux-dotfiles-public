@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+function print_usage() {
+    echo "$0: transcode a folder of FLACs to OPUSs"
+    echo "The FLAC directory must already exist, the OPUS directory must not"
+    echo "Usage: $0 <FLAC-DIR-PATH> <OPUS-DIR-PATH>"
+}
+
+function exit_usage() {
+    print_usage >&2
+    exit 1
+}
+
+if [[ $# -ne 2 ]]; then exit_usage; fi
+if [[ ! -d "$1" ]]; then exit_usage; fi
+if [[ -e "$2" ]]; then exit_usage; fi
+
+SRC_DIR="$1"
+DST_DIR_ABS="$(realpath "$2" || exit_usage)"
+
+mkdir "$DST_DIR_ABS"
+
+# mirror directory structure
+# https://superuser.com/questions/299938/how-can-i-recursively-copy-files-by-file-extension-preserving-directory-structu
+find "$SRC_DIR" -mindepth 1 -type d -printf '%P\0' | ( cd "$DST_DIR_ABS"; xargs -r0 mkdir -p --; )
+(
+    # copy nonmusic files
+    cd "$SRC_DIR"
+    find . -type f \( -not -name '*.flac' \) -print0 | cpio -p0m "$DST_DIR_ABS"
+    # copy music files
+    find . -type f -name '*.flac' -printf '%P\0' | xargs -0 -n 1 bash -c 'ffmpeg -i "$1" -map_metadata -0 -codec libopus "${0}/${1%.*}.opus"' "$DST_DIR_ABS"
+)
