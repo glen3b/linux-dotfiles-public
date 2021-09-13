@@ -2,5 +2,7 @@
 . ~/bin/monitordefs.sh
 xrandr --output "$PRIMARY_OUTPUT" --primary
 ~/bin/single-monitor
+eval $(gnome-keyring-daemon --start)
+export SSH_AUTH_SOCK
 /bin/systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_ID
 systemctl --user start xorg.target
