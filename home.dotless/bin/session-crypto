@@ -13,12 +13,15 @@ then
     print_usage
 fi
 
+set -e
+PASSPHRASE="$(secret-tool lookup FQNS me.glen3b.linux.dotfiles NAME sessionfile_wrapperkey DURATION permanent FORMAT ascii)"
+
 if [ "$1" = "encrypt" ]
 then
-    exec gpg -a --symmetric --batch --passphrase-file ~/.sessiontokens.key 2>/dev/null
+    exec gpg -a --symmetric --batch --passphrase-fd 3 2>/dev/null 3<<<"$PASSPHRASE"
 elif [ "$1" = "decrypt" ]
 then
-    exec gpg --batch --passphrase-file ~/.sessiontokens.key -o - -d 2>/dev/null
+    exec gpg --batch --passphrase-fd 3 -o - -d 2>/dev/null 3<<<"$PASSPHRASE"
 else
     print_usage
 fi
