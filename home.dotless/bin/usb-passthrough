@@ -5,5 +5,5 @@ if [ $# -ne 1 ] || ( [ "$1" != "attach" ] && [ "$1" != "detach" ] ); then
 fi
 COMMAND="$1-device"
 set -e
-virsh -c qemu:///system "$COMMAND" Windows_Gaming ~/.local/share/gaming-vm/usb-passthrough-definitions/mouse.xml
-virsh -c qemu:///system "$COMMAND" Windows_Gaming ~/.local/share/gaming-vm/usb-passthrough-definitions/keyboard.xml
+virsh -c qemu:///system "$COMMAND" --live Windows_Gaming ~/.local/share/gaming-vm/usb-passthrough-definitions/mouse.xml
+virsh -c qemu:///system "$COMMAND" --live Windows_Gaming ~/.local/share/gaming-vm/usb-passthrough-definitions/keyboard.xml
