@@ -4,5 +4,10 @@ xrandr --output "$PRIMARY_OUTPUT" --primary
 ~/bin/single-monitor
 eval $(gnome-keyring-daemon --start)
 export SSH_AUTH_SOCK
-/bin/systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_ID
+export LIBVIRT_DEFAULT_URI="qemu:///system"
+export _JAVA_OPTIONS="-Dawt.useSystemAAFontSettings=on -Dswing.aatext=true -Dswing.defaultlaf=com.sun.java.swing.plaf.gtk.GTKLookAndFeel"
+# from old .pam_environment
+# PULSE_PROP	DEFAULT="filter.want=echo-cancel"
+# VAGRANT_DEFAULT_PROVIDER	DEFAULT="libvirt"
+/bin/systemctl --user import-environment DISPLAY XAUTHORITY XDG_SESSION_ID LIBVIRT_DEFAULT_URI
 systemctl --user start xorg.target
