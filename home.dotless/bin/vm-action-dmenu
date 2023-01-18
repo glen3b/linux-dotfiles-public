@@ -97,23 +97,29 @@ with libvirt.open() as virt_conn:
     try:
         if action == 'shutdown':
             if monitor_script_dir is not None:
-                subprocess.check_call([monitor_script_dir + 'dual-monitor'])
+                subprocess.check_output([monitor_script_dir + 'dual-monitor'], stderr=subprocess.STDOUT)
             if usb_action_script is not None:
-                subprocess.check_call([usb_action_script, 'detach'])
+                try:
+                    subprocess.check_output([usb_action_script, 'detach'], stderr=subprocess.STDOUT)
+                except:
+                    # Don't actually care if this fails, we're about to shut down the VM
+                    pass
             vm.shutdown()
         elif action == 'start':
             if monitor_script_dir is not None:
-                subprocess.check_call([monitor_script_dir + 'single-monitor'])
+                subprocess.check_output([monitor_script_dir + 'single-monitor'], stderr=subprocess.STDOUT)
             vm.create()
         elif action.endswith('-peripherals'):
-            subprocess.check_call([usb_action_script, action.split('-')[0]])
+            subprocess.check_output([usb_action_script, action.split('-')[0]], stderr=subprocess.STDOUT)
         elif action.endswith('-monitor'):
-            subprocess.check_call([monitor_script_dir + action])
+            subprocess.check_output([monitor_script_dir + action])
         elif action.startswith('synergy') or action.startswith('xautolock'):
             actionsplit = action.split('-')
-            subprocess.check_call(['systemctl', '--user', actionsplit[1], actionsplit[0]])
-    except:
-        quit_with_error('Error Executing Action', 'The following error(s) occurred while attempting to execute action "%s":\n\n%s' % (action, sys.exc_info()[0]))
+            subprocess.check_output(['systemctl', '--user', actionsplit[1], actionsplit[0]], stderr=subprocess.STDOUT)
+    except Exception as e:
+        if isinstance(e, subprocess.CalledProcessError):
+            e = str(e) + '\n\n' + e.stdout.decode('utf-8')
+        quit_with_error('Error Executing Action', 'The following error(s) occurred while attempting to execute action "%s":\n\n%s' % (action, e))
 
 # after everything, signal i3blocks in case status changed
 if i3block_signal is not None:
